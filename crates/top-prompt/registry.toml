@@ -1,0 +1,113 @@
+# The top-prompt component registry. Each component names its source file;
+# `topcoat ui` computes versions from the source. The registry's identity is its
+# crate name (`top-prompt`), so the manifest records only the format version
+# and the components. It ships no theme: the components use the tokens of the
+# theme installed by `topcoat ui init` (the built-in `neutral` theme).
+#
+# Built-in components are dependencies in the registry named `topcoat`, which
+# is how `topcoat ui` names the built-in registry (its crate,
+# `topcoat-ui-registry`, is usually only a transitive dependency, and naming it
+# by crate would require apps to depend on it directly). Built-ins install into
+# the same components directory, so the sources reach them as `super::button`
+# and so on. Dependencies of dependencies, such as tooltip's `floating`, are
+# resolved by `topcoat ui`; they are listed here only when a source uses them
+# directly.
+
+version = 1
+
+[components.attachment]
+source = "src/components/attachment.rs"
+dependencies = [{ registry = "topcoat", name = "button" }]
+
+[components.branch_picker]
+source = "src/components/branch_picker.rs"
+dependencies = [{ registry = "topcoat", name = "button" }]
+
+[components.chain_of_thought]
+source = "src/components/chain_of_thought.rs"
+
+[components.code_block]
+source = "src/components/code_block.rs"
+dependencies = ["copy_button"]
+
+[components.conversation]
+source = "src/components/conversation.rs"
+dependencies = [{ registry = "topcoat", name = "button" }]
+
+[components.copy_button]
+source = "src/components/copy_button.rs"
+dependencies = [
+    { registry = "topcoat", name = "button" },
+    { registry = "topcoat", name = "tooltip" },
+]
+
+[components.feedback_bar]
+source = "src/components/feedback_bar.rs"
+dependencies = [{ registry = "topcoat", name = "button" }]
+
+[components.file_upload]
+source = "src/components/file_upload.rs"
+dependencies = [{ registry = "topcoat", name = "button" }]
+
+[components.image]
+source = "src/components/image.rs"
+
+[components.loader]
+source = "src/components/loader.rs"
+dependencies = ["text_shimmer", { registry = "topcoat", name = "spinner" }]
+
+[components.markdown]
+source = "src/components/markdown.rs"
+dependencies = ["code_block"]
+
+[components.message]
+source = "src/components/message.rs"
+dependencies = [
+    { registry = "topcoat", name = "avatar" },
+    { registry = "topcoat", name = "button" },
+    { registry = "topcoat", name = "floating" },
+    { registry = "topcoat", name = "tooltip" },
+]
+
+[components.prompt_input]
+source = "src/components/prompt_input.rs"
+dependencies = [
+    { registry = "topcoat", name = "button" },
+    { registry = "topcoat", name = "spinner" },
+]
+
+[components.reasoning]
+source = "src/components/reasoning.rs"
+dependencies = ["text_shimmer"]
+
+[components.sources]
+source = "src/components/sources.rs"
+dependencies = [
+    { registry = "topcoat", name = "badge" },
+    { registry = "topcoat", name = "hover_card" },
+]
+
+[components.steps]
+source = "src/components/steps.rs"
+
+[components.suggestion]
+source = "src/components/suggestion.rs"
+dependencies = [{ registry = "topcoat", name = "button" }]
+
+[components.system_message]
+source = "src/components/system_message.rs"
+dependencies = [{ registry = "topcoat", name = "button" }]
+
+[components.text_shimmer]
+source = "src/components/text_shimmer.rs"
+
+[components.thinking_bar]
+source = "src/components/thinking_bar.rs"
+dependencies = ["text_shimmer", { registry = "topcoat", name = "button" }]
+
+[components.tool_call]
+source = "src/components/tool_call.rs"
+dependencies = [
+    { registry = "topcoat", name = "badge" },
+    { registry = "topcoat", name = "spinner" },
+]

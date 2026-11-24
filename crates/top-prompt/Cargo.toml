@@ -1,0 +1,20 @@
+[package]
+name = "top-prompt"
+description = "AI chat components for Topcoat, installed with `topcoat ui add --registry top-prompt`."
+keywords = ["topcoat", "ui", "chat", "ai", "components"]
+categories = ["web-programming"]
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+# Declares this crate as a topcoat-ui component registry: `topcoat ui` reads
+# `registry.toml` (and the component sources it names) from this directory,
+# relative to the crate root.
+#
+# The crate has no runtime code. Component sources are copied into an app by
+# `topcoat ui add`; they are compiled and tested there. In this workspace the
+# docs site (`site/`) installs every component and is the
+# compile and test check for the sources.
+[package.metadata.topcoat-ui]
+registry = "."

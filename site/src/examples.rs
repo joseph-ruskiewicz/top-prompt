@@ -1,0 +1,42 @@
+//! The examples the docs pages render and show. Each file is one example; see
+//! `catalog.rs` for where they appear.
+
+pub mod attachment_basic;
+pub mod block_conversation_actions;
+pub mod block_conversation_avatars;
+pub mod block_conversation_basic;
+pub mod block_conversation_prompt_input;
+pub mod block_conversation_scroll;
+pub mod block_prompt_input_actions;
+pub mod block_prompt_input_autocomplete;
+pub mod block_prompt_input_suggestions;
+pub mod block_sidebar_history;
+pub mod branch_picker_basic;
+pub mod chain_of_thought_basic;
+pub mod chat_app;
+pub mod code_block_basic;
+pub mod code_block_highlighted;
+pub mod conversation_basic;
+pub mod conversation_empty;
+pub mod copy_button_basic;
+pub mod feedback_bar_basic;
+pub mod file_upload_basic;
+pub mod image_basic;
+pub mod loader_sizes;
+pub mod loader_variants;
+pub mod markdown_basic;
+pub mod message_actions;
+pub mod message_basic;
+pub mod prompt_input_actions;
+pub mod prompt_input_basic;
+pub mod reasoning_basic;
+pub mod sources_chips;
+pub mod sources_citations;
+pub mod sources_list;
+pub mod steps_basic;
+pub mod suggestion_basic;
+pub mod suggestion_highlight;
+pub mod system_message_variants;
+pub mod text_shimmer_basic;
+pub mod thinking_bar_basic;
+pub mod tool_call_statuses;

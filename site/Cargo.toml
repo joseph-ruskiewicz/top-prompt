@@ -1,0 +1,24 @@
+[package]
+name = "site"
+description = "The top-prompt docs site, built with Topcoat and the top-prompt components."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+# The `markdown` component renders with pulldown-cmark; apps that install it add
+# this dependency themselves.
+pulldown-cmark = { version = "0.13.0", default-features = false, features = ["html"] }
+tokio = { version = "1.43", features = ["rt-multi-thread", "macros", "sync", "time"] }
+# The component registry. `topcoat ui` only offers registries that are direct
+# dependencies; the crate itself adds no code.
+top-prompt = { path = "../crates/top-prompt" }
+topcoat = { version = "0.12.1", features = ["font-fontsource", "icon-iconify", "tailwind", "ui"] }
+
+[build-dependencies]
+topcoat = { version = "0.12.1", default-features = false, features = ["icon-iconify", "tailwind"] }
+
+[dev-dependencies]
+topcoat-ui = "0.12.1"
