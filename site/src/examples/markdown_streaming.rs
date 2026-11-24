@@ -12,19 +12,19 @@ use crate::components::{
     markdown::markdown,
 };
 
-const ANSWER: &str = "Read the file line by line with a **buffered reader**:
+const ANSWER: &str = "Read the file line by line, so a large file never sits in memory:
 
-```rust
-use std::io::{BufRead, BufReader};
+```python
+from pathlib import Path
 
-let file = std::fs::File::open(\"notes.txt\")?;
-for line in BufReader::new(file).lines() {
-    println!(\"{}\", line?);
-}
+def longest_line(path: str) -> str:
+    \"\"\"Returns the longest line, without its line break.\"\"\"
+    with Path(path).open(encoding=\"utf-8\") as file:
+        return max((line.rstrip(\"\\n\") for line in file), key=len, default=\"\")
 ```
 
-Each `line` is a `Result`, because reading can fail halfway. See the \
-[`BufRead` docs](https://doc.rust-lang.org/std/io/trait.BufRead.html) for more.";
+`max` reads the lines lazily. See the \
+[`pathlib` docs](https://docs.python.org/3/library/pathlib.html) for more.";
 
 /// Stands in for the model: waits as long as one chunk takes to arrive.
 #[procedure]

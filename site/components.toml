@@ -57,7 +57,7 @@ hash = "sha256:1d79d80169fd3efecef0ac8975b40c08cf28ae65157bdf87ae1a50a2d717f4da"
 file = "src/components/chain_of_thought.rs"
 
 [registries.topcoat-prompt.components.code_block]
-hash = "sha256:383eadb20f983985f635c72d4382ff12cbc9454b7dad94eee22cd07225fb35da"
+hash = "sha256:a2448964a9468d99f0a761e9e8d985c3e1c8b00990b564946a7a1c695a995e0f"
 file = "src/components/code_block.rs"
 
 [registries.topcoat-prompt.components.conversation]
@@ -85,7 +85,7 @@ hash = "sha256:d9eb67962b5e71ef5b724f3c8f1820e270a28229b4be43fdc4b8e59edd8ead77"
 file = "src/components/loader.rs"
 
 [registries.topcoat-prompt.components.markdown]
-hash = "sha256:8b3ee995aef9aaf4f686ba3e0f632d73969e6c49e5899c3a6c72cfc4a8e9500e"
+hash = "sha256:894eff0e1992b83e2232327461ad7d6e96362a181393c6afc5099f319087c3e9"
 file = "src/components/markdown.rs"
 
 [registries.topcoat-prompt.components.message]

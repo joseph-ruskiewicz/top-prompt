@@ -18,7 +18,6 @@ use crate::{
         code_block::{code_block, code_block_copy},
         sheet::{SheetSide, sheet, sheet_content},
     },
-    highlight,
 };
 
 /// The name of the cookie that remembers the theme.
@@ -348,7 +347,8 @@ pub async fn preview_panel(
     })
 }
 
-/// Rust source, highlighted, in the registry's code block, scrolling past a height.
+/// Source in the registry's code block, which highlights it, scrolling past a height.
+/// The language is Rust unless given.
 #[component]
 pub async fn code_panel(
     cx: &Cx,
@@ -356,7 +356,6 @@ pub async fn code_panel(
     #[default] language: Option<&str>,
 ) -> Result<impl View> {
     let language = language.unwrap_or("rust");
-    let markup = (language == "rust").then(|| Unescaped::new_unchecked(highlight::rust(source)));
 
     Ok(view! {
         <div class="code-panel">
@@ -365,10 +364,6 @@ pub async fn code_panel(
                 code: source,
                 attrs: attributes! {
                     class="[&_pre]:max-h-[650px] [&_pre]:overflow-y-auto [&_pre]:text-[13px] [&_pre]:leading-[1.75]"
-                },
-                match markup {
-                    Some(markup) => (markup),
-                    None => (source),
                 }
             )
         </div>

@@ -58,7 +58,8 @@ const TABLE_WRAPPER: &str = r#"<div data-slot="markdown-table" class="w-full ove
 /// render as their text. Images load only from `http` and `https` URLs and otherwise
 /// render as their alternative text.
 ///
-/// Fenced code blocks render as a [`code_block`] with a copy button. Incomplete
+/// Fenced code blocks render as a [`code_block`] with a copy button, highlighted for the
+/// fence's language when [`code_block`] supports it. Incomplete
 /// markdown, such as an unclosed code fence or half a link while a response streams,
 /// renders as far as it goes.
 ///

@@ -132,7 +132,7 @@ const BUILD_RS: &str = r#"fn main() {
 /// The dependency sections the Installation page shows.
 const CARGO_TOML: &str = r#"[dependencies]
 topcoat = { version = "0.12", features = ["icon-iconify", "tailwind", "ui"] }
-topcoat-prompt = "0.1"
+topcoat-prompt = "0.2"
 
 [build-dependencies]
 topcoat = { version = "0.12", default-features = false, features = ["icon-iconify", "tailwind"] }

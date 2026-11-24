@@ -12,7 +12,6 @@ mod catalog;
 mod docs;
 mod examples;
 mod full;
-mod highlight;
 mod shell;
 
 use components::button::{ButtonSize, ButtonVariant, button_variants};

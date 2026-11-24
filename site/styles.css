@@ -146,26 +146,3 @@
     @apply bg-background font-sans text-foreground;
   }
 }
-
-/* --- Site only: syntax highlighting -----------------------------------------
-   The docs highlight Rust on the server (src/highlight.rs) into `tok-*` spans.
-   These colors belong to the site, not to the theme or the components. They
-   are kept few and low in chroma so code reads calmly in both modes. */
-
-.tok-keyword { color: oklch(0.52 0.16 15); }
-.tok-string { color: oklch(0.45 0.11 250); }
-.tok-comment { color: var(--muted-foreground); font-style: italic; }
-.tok-number { color: oklch(0.5 0.14 250); }
-.tok-function { color: oklch(0.47 0.15 300); }
-.tok-macro { color: oklch(0.47 0.15 300); }
-.tok-type { color: oklch(0.5 0.1 190); }
-.tok-attribute { color: var(--muted-foreground); }
-.tok-lifetime { color: oklch(0.55 0.12 60); }
-
-.dark .tok-keyword { color: oklch(0.74 0.13 15); }
-.dark .tok-string { color: oklch(0.8 0.08 240); }
-.dark .tok-number { color: oklch(0.78 0.1 240); }
-.dark .tok-function { color: oklch(0.78 0.11 300); }
-.dark .tok-macro { color: oklch(0.78 0.11 300); }
-.dark .tok-type { color: oklch(0.8 0.08 190); }
-.dark .tok-lifetime { color: oklch(0.8 0.1 70); }
