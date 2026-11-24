@@ -27,7 +27,10 @@ jobs:
 
       # rust-toolchain.toml selects stable; add the lint and format tools to it.
       - name: Install the toolchain
-        run: rustup component add clippy rustfmt
+        run: |
+          rustup component add clippy rustfmt
+          rustc --version
+          cargo --version
 
       # Dependencies and build output, keyed on Cargo.lock and the toolchain.
       - uses: Swatinem/rust-cache@v2
@@ -60,13 +63,14 @@ jobs:
         working-directory: crates/top-prompt
         run: topcoat fmt --check
 
-      # site/build.rs downloads Tailwind and stages the Lucide icons here.
+      # site/build.rs downloads Tailwind and the Lucide icons; the script retries only
+      # when that build script fails (see the script for why).
       - name: cargo build
-        run: cargo build --workspace
+        run: .github/scripts/cargo-retry.sh cargo build --workspace
       - name: cargo clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: .github/scripts/cargo-retry.sh cargo clippy --workspace --all-targets -- -D warnings
       - name: cargo test
-        run: cargo test --workspace
+        run: .github/scripts/cargo-retry.sh cargo test --workspace
 
   # Deploys main to Fly.io once the checks pass. Pull requests never reach this job, so
   # their runs never see the token.
