@@ -1,6 +1,6 @@
-# The top-prompt component registry. Each component names its source file;
+# The topcoat-prompt component registry. Each component names its source file;
 # `topcoat ui` computes versions from the source. The registry's identity is its
-# crate name (`top-prompt`), so the manifest records only the format version
+# crate name (`topcoat-prompt`), so the manifest records only the format version
 # and the components. It ships no theme: the components use the tokens of the
 # theme installed by `topcoat ui init` (the built-in `neutral` theme).
 #

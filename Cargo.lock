@@ -1214,8 +1214,8 @@ version = "0.1.0"
 dependencies = [
  "pulldown-cmark",
  "tokio",
- "top-prompt",
  "topcoat",
+ "topcoat-prompt",
  "topcoat-ui",
 ]
 
@@ -1458,10 +1458,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "009dbb7700f11c55ef83aebbe4c0e9cf1f1ac0844bd8d6f00dc38f302026e13a"
 
 [[package]]
-name = "top-prompt"
-version = "0.1.0"
-
-[[package]]
 name = "topcoat"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1698,6 +1694,10 @@ dependencies = [
  "topcoat-view",
  "topcoat-view-macro",
 ]
+
+[[package]]
+name = "topcoat-prompt"
+version = "0.1.0"
 
 [[package]]
 name = "topcoat-router"

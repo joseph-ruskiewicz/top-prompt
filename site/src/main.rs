@@ -1,6 +1,6 @@
-//! The top-prompt docs site, built with Topcoat and the top-prompt components.
+//! The topcoat-prompt docs site, built with Topcoat and the topcoat-prompt components.
 
-// Installed with `topcoat ui add --all --registry top-prompt`, which also pulled in
+// Installed with `topcoat ui add --all --registry topcoat-prompt`, which also pulled in
 // the built-in components they use, plus the built-in sheet for the mobile menu. Like
 // any vendored library, not every item is used by this app.
 #[allow(dead_code)]
@@ -34,7 +34,7 @@ use topcoat::{
 use crate::examples::chat_app::Chat;
 
 /// Where the GitHub links point. A placeholder until the repository is public.
-pub const GITHUB_URL: &str = "https://github.com/joseph-ruskiewicz/top-prompt";
+pub const GITHUB_URL: &str = "https://github.com/joseph-ruskiewicz/topcoat-prompt";
 
 #[tokio::main]
 async fn main() {
@@ -74,7 +74,7 @@ async fn layout(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
             <head>
                 <meta charset="utf-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1">
-                <title>"top-prompt"</title>
+                <title>"topcoat-prompt"</title>
                 <meta
                     name="description"
                     content="Chat interface components for Topcoat apps, written in Rust."
@@ -96,7 +96,7 @@ async fn layout(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
     })
 }
 
-/// The home page: what top-prompt is, and a live composer with its code.
+/// The home page: what topcoat-prompt is, and a live composer with its code.
 #[page]
 async fn home(cx: &Cx) -> Result<impl View> {
     let example = &catalog::HOME_EXAMPLE;

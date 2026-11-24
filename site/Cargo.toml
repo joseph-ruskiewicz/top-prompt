@@ -1,6 +1,6 @@
 [package]
 name = "site"
-description = "The top-prompt docs site, built with Topcoat and the top-prompt components."
+description = "The topcoat-prompt docs site, built with Topcoat and the topcoat-prompt components."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -14,7 +14,7 @@ pulldown-cmark = { version = "0.13.0", default-features = false, features = ["ht
 tokio = { version = "1.43", features = ["rt-multi-thread", "macros", "sync", "time"] }
 # The component registry. `topcoat ui` only offers registries that are direct
 # dependencies; the crate itself adds no code.
-top-prompt = { path = "../crates/top-prompt" }
+topcoat-prompt = { path = "../crates/topcoat-prompt" }
 topcoat = { version = "0.12.1", features = ["font-fontsource", "icon-iconify", "tailwind", "ui"] }
 
 [build-dependencies]

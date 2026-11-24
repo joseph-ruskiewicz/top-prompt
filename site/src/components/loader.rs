@@ -78,9 +78,9 @@ impl LoaderSize {
 /// Keyframes Tailwind does not ship: a fade for `Typing` and a vertical scale for
 /// `Wave` and `Bars`. Every loader on a page shares the names, and repeating the rules
 /// is harmless.
-const KEYFRAMES: &str = "@keyframes top-prompt-fade { 0%, 100% { opacity: 0.25; } \
+const KEYFRAMES: &str = "@keyframes topcoat-prompt-fade { 0%, 100% { opacity: 0.25; } \
                          50% { opacity: 1; } } \
-                         @keyframes top-prompt-scale { 0%, 100% { transform: scaleY(0.4); } \
+                         @keyframes topcoat-prompt-scale { 0%, 100% { transform: scaleY(0.4); } \
                          50% { transform: scaleY(1); } }";
 
 /// Classes shared by every loader. `relative` contains the screen reader label, which
@@ -93,7 +93,7 @@ const DOT: StaticClass =
 
 /// Classes for one fading dot of `Typing`.
 const FADING_DOT: StaticClass = class!(
-    "rounded-full bg-current animate-[top-prompt-fade_1.2s_ease-in-out_infinite]",
+    "rounded-full bg-current animate-[topcoat-prompt-fade_1.2s_ease-in-out_infinite]",
     "motion-reduce:animate-none",
 );
 
@@ -213,7 +213,7 @@ pub async fn loader(
                             <span
                                 class=(class!(
                                     BAR,
-                                    "w-0.5 animate-[top-prompt-scale_1s_ease-in-out_infinite]",
+                                    "w-0.5 animate-[topcoat-prompt-scale_1s_ease-in-out_infinite]",
                                 ))
                                 style=(format!("animation-delay: {delay}ms"))
                             ></span>
@@ -231,7 +231,7 @@ pub async fn loader(
                             <span
                                 class=(class!(
                                     BAR,
-                                    "w-1 animate-[top-prompt-scale_0.9s_ease-in-out_infinite]",
+                                    "w-1 animate-[topcoat-prompt-scale_0.9s_ease-in-out_infinite]",
                                 ))
                                 style=(format!("animation-delay: {delay}ms"))
                             ></span>

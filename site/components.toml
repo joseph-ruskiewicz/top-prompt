@@ -8,90 +8,6 @@ registry = "topcoat"
 hash = "sha256:5e370e648fef95d78c8b048d99be7f7d79fd82132f8c9cc1ce854d3b73024137"
 file = "styles.css"
 
-[registries.top-prompt.components.attachment]
-hash = "sha256:17cc05238cc463eb9badab1f1228d66b3f5b3a9afc538484429e3297e493aba9"
-file = "src/components/attachment.rs"
-
-[registries.top-prompt.components.branch_picker]
-hash = "sha256:eeb2ece9cee1ce987e696d8c5df446d14b113ef191783ff5f2dd46ec56711219"
-file = "src/components/branch_picker.rs"
-
-[registries.top-prompt.components.chain_of_thought]
-hash = "sha256:1d79d80169fd3efecef0ac8975b40c08cf28ae65157bdf87ae1a50a2d717f4da"
-file = "src/components/chain_of_thought.rs"
-
-[registries.top-prompt.components.code_block]
-hash = "sha256:383eadb20f983985f635c72d4382ff12cbc9454b7dad94eee22cd07225fb35da"
-file = "src/components/code_block.rs"
-
-[registries.top-prompt.components.conversation]
-hash = "sha256:5afcdb852346c9d4f3a7dfde4e68d79b446b2ceaf0bffbf6ba7df6cf32b56a13"
-file = "src/components/conversation.rs"
-
-[registries.top-prompt.components.copy_button]
-hash = "sha256:22df5094386a4f60a4300ceeebfd9a9c98549400f6bffe34165667964f8f6f0d"
-file = "src/components/copy_button.rs"
-
-[registries.top-prompt.components.feedback_bar]
-hash = "sha256:8fed480e4839afe15701f190e530cec2d9e54eb7c4249b7423b4ea9af390151b"
-file = "src/components/feedback_bar.rs"
-
-[registries.top-prompt.components.file_upload]
-hash = "sha256:b9e8d551899f9d01b279c191724283ca75c41084be68687ab252fdd51e106da1"
-file = "src/components/file_upload.rs"
-
-[registries.top-prompt.components.image]
-hash = "sha256:02cfa80a94e17d502ed67d7185f2be0d907b29951f601b48b16566a6c6e8a7ae"
-file = "src/components/image.rs"
-
-[registries.top-prompt.components.loader]
-hash = "sha256:d35d00b260ec54e4027c55e4e1fbb06d37c27cc4df53df4bd2c69287a067f4c9"
-file = "src/components/loader.rs"
-
-[registries.top-prompt.components.markdown]
-hash = "sha256:8b3ee995aef9aaf4f686ba3e0f632d73969e6c49e5899c3a6c72cfc4a8e9500e"
-file = "src/components/markdown.rs"
-
-[registries.top-prompt.components.message]
-hash = "sha256:81aa9dfadfbbdfa1870c30427755d33a8ac0db028f360392027318907d9b42ae"
-file = "src/components/message.rs"
-
-[registries.top-prompt.components.prompt_input]
-hash = "sha256:d7df7d6fa9a1fd9e5fd4da668d152882b78c070903c11b892711de855614c6cc"
-file = "src/components/prompt_input.rs"
-
-[registries.top-prompt.components.reasoning]
-hash = "sha256:e3e50c980cd30655545e22b807fb2655505e0bd0a8f39d8120449582f228721b"
-file = "src/components/reasoning.rs"
-
-[registries.top-prompt.components.sources]
-hash = "sha256:07c4b22c36a59fa7661f8af071759a0c2dab1d5b68d87000c708a1f17a89e6c8"
-file = "src/components/sources.rs"
-
-[registries.top-prompt.components.steps]
-hash = "sha256:6d35217de52b7f461fcebdb35cef88b1e802a93e3de5358f66140d51b8c13246"
-file = "src/components/steps.rs"
-
-[registries.top-prompt.components.suggestion]
-hash = "sha256:b1f20893d0b5f65c6d1e8aae8abfafe45623cb6a5ea92ec59e005c9b522ed54e"
-file = "src/components/suggestion.rs"
-
-[registries.top-prompt.components.system_message]
-hash = "sha256:2506b8125ef83bb4b5a01c5d21ae4540f00794b60985fe7dae30b422e0933ade"
-file = "src/components/system_message.rs"
-
-[registries.top-prompt.components.text_shimmer]
-hash = "sha256:703703936c18c223e67cbb7098d8f0b69f17e4c691fee37fe47801171d1a02d2"
-file = "src/components/text_shimmer.rs"
-
-[registries.top-prompt.components.thinking_bar]
-hash = "sha256:cd1d11ce79662e81a5b6cf283dd60f77d3a30ca6f0c158b115259269d9c2f2e2"
-file = "src/components/thinking_bar.rs"
-
-[registries.top-prompt.components.tool_call]
-hash = "sha256:ae7ff34d0ed8db6c384ddb08bcfea906c5179c9522e32d86c8e24f88d2e5e3c2"
-file = "src/components/tool_call.rs"
-
 [registries.topcoat.components.avatar]
 hash = "sha256:472dd4dec80108695926b082212a25c083594c5c849150d7fb3093fd6b1c3cdf"
 file = "src/components/avatar.rs"
@@ -127,3 +43,87 @@ file = "src/components/spinner.rs"
 [registries.topcoat.components.tooltip]
 hash = "sha256:b9b2c2790d5cd0499ea6b3f33aeaf08c132be21bc67f35035e17ed6776db76d3"
 file = "src/components/tooltip.rs"
+
+[registries.topcoat-prompt.components.attachment]
+hash = "sha256:17cc05238cc463eb9badab1f1228d66b3f5b3a9afc538484429e3297e493aba9"
+file = "src/components/attachment.rs"
+
+[registries.topcoat-prompt.components.branch_picker]
+hash = "sha256:eeb2ece9cee1ce987e696d8c5df446d14b113ef191783ff5f2dd46ec56711219"
+file = "src/components/branch_picker.rs"
+
+[registries.topcoat-prompt.components.chain_of_thought]
+hash = "sha256:1d79d80169fd3efecef0ac8975b40c08cf28ae65157bdf87ae1a50a2d717f4da"
+file = "src/components/chain_of_thought.rs"
+
+[registries.topcoat-prompt.components.code_block]
+hash = "sha256:383eadb20f983985f635c72d4382ff12cbc9454b7dad94eee22cd07225fb35da"
+file = "src/components/code_block.rs"
+
+[registries.topcoat-prompt.components.conversation]
+hash = "sha256:5afcdb852346c9d4f3a7dfde4e68d79b446b2ceaf0bffbf6ba7df6cf32b56a13"
+file = "src/components/conversation.rs"
+
+[registries.topcoat-prompt.components.copy_button]
+hash = "sha256:22df5094386a4f60a4300ceeebfd9a9c98549400f6bffe34165667964f8f6f0d"
+file = "src/components/copy_button.rs"
+
+[registries.topcoat-prompt.components.feedback_bar]
+hash = "sha256:8fed480e4839afe15701f190e530cec2d9e54eb7c4249b7423b4ea9af390151b"
+file = "src/components/feedback_bar.rs"
+
+[registries.topcoat-prompt.components.file_upload]
+hash = "sha256:b9e8d551899f9d01b279c191724283ca75c41084be68687ab252fdd51e106da1"
+file = "src/components/file_upload.rs"
+
+[registries.topcoat-prompt.components.image]
+hash = "sha256:02cfa80a94e17d502ed67d7185f2be0d907b29951f601b48b16566a6c6e8a7ae"
+file = "src/components/image.rs"
+
+[registries.topcoat-prompt.components.loader]
+hash = "sha256:d9eb67962b5e71ef5b724f3c8f1820e270a28229b4be43fdc4b8e59edd8ead77"
+file = "src/components/loader.rs"
+
+[registries.topcoat-prompt.components.markdown]
+hash = "sha256:8b3ee995aef9aaf4f686ba3e0f632d73969e6c49e5899c3a6c72cfc4a8e9500e"
+file = "src/components/markdown.rs"
+
+[registries.topcoat-prompt.components.message]
+hash = "sha256:81aa9dfadfbbdfa1870c30427755d33a8ac0db028f360392027318907d9b42ae"
+file = "src/components/message.rs"
+
+[registries.topcoat-prompt.components.prompt_input]
+hash = "sha256:d7df7d6fa9a1fd9e5fd4da668d152882b78c070903c11b892711de855614c6cc"
+file = "src/components/prompt_input.rs"
+
+[registries.topcoat-prompt.components.reasoning]
+hash = "sha256:e3e50c980cd30655545e22b807fb2655505e0bd0a8f39d8120449582f228721b"
+file = "src/components/reasoning.rs"
+
+[registries.topcoat-prompt.components.sources]
+hash = "sha256:07c4b22c36a59fa7661f8af071759a0c2dab1d5b68d87000c708a1f17a89e6c8"
+file = "src/components/sources.rs"
+
+[registries.topcoat-prompt.components.steps]
+hash = "sha256:6d35217de52b7f461fcebdb35cef88b1e802a93e3de5358f66140d51b8c13246"
+file = "src/components/steps.rs"
+
+[registries.topcoat-prompt.components.suggestion]
+hash = "sha256:b1f20893d0b5f65c6d1e8aae8abfafe45623cb6a5ea92ec59e005c9b522ed54e"
+file = "src/components/suggestion.rs"
+
+[registries.topcoat-prompt.components.system_message]
+hash = "sha256:2506b8125ef83bb4b5a01c5d21ae4540f00794b60985fe7dae30b422e0933ade"
+file = "src/components/system_message.rs"
+
+[registries.topcoat-prompt.components.text_shimmer]
+hash = "sha256:d9d0519fe47785027e562d8d55dabfec683d1f6f90697eb5c80c35d5d7550de8"
+file = "src/components/text_shimmer.rs"
+
+[registries.topcoat-prompt.components.thinking_bar]
+hash = "sha256:cd1d11ce79662e81a5b6cf283dd60f77d3a30ca6f0c158b115259269d9c2f2e2"
+file = "src/components/thinking_bar.rs"
+
+[registries.topcoat-prompt.components.tool_call]
+hash = "sha256:ae7ff34d0ed8db6c384ddb08bcfea906c5179c9522e32d86c8e24f88d2e5e3c2"
+file = "src/components/tool_call.rs"

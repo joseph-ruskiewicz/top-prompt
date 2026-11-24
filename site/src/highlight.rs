@@ -269,7 +269,7 @@ mod tests {
             include_str!("main.rs"),
             include_str!("highlight.rs"),
             include_str!("api.rs"),
-            include_str!("../../crates/top-prompt/src/components/markdown.rs"),
+            include_str!("../../crates/topcoat-prompt/src/components/markdown.rs"),
         ] {
             assert_eq!(text(&rust(source)), source);
         }

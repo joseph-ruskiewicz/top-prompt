@@ -55,12 +55,12 @@ jobs:
         run: cargo fmt --check
       # cargo fmt skips the registry sources, which no crate compiles as modules.
       - name: rustfmt (registry components)
-        run: rustfmt --check crates/top-prompt/src/components/*.rs
+        run: rustfmt --check crates/topcoat-prompt/src/components/*.rs
       - name: topcoat fmt (site)
         working-directory: site
         run: topcoat fmt --check
       - name: topcoat fmt (registry)
-        working-directory: crates/top-prompt
+        working-directory: crates/topcoat-prompt
         run: topcoat fmt --check
 
       # site/build.rs downloads Tailwind and the Lucide icons; the script retries only

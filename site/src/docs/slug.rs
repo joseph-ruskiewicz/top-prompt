@@ -66,7 +66,7 @@ async fn introduction(cx: &Cx) -> Result<impl View> {
         )
         prose(
             <p>
-                "top-prompt is a set of components for building chat interfaces with "
+                "topcoat-prompt is a set of components for building chat interfaces with "
                 <a href="https://github.com/tokio-rs/topcoat">"Topcoat"</a>
                 ": conversations that follow streaming replies, messages, a prompt input, \
                 markdown, reasoning, tool calls, sources and more."
@@ -103,7 +103,7 @@ async fn introduction(cx: &Cx) -> Result<impl View> {
             </ul>
             <h2>"What it is not"</h2>
             <p>
-                "top-prompt does not talk to a model. The components are presentational: \
+                "topcoat-prompt does not talk to a model. The components are presentational: \
                 your app owns the conversation, calls whichever model it likes, and renders \
                 the result with these components. The "
                 <a href="/blocks#chat_app">"full chat app"</a>
@@ -132,7 +132,7 @@ const BUILD_RS: &str = r#"fn main() {
 /// The dependency sections the Installation page shows.
 const CARGO_TOML: &str = r#"[dependencies]
 topcoat = { version = "0.12", features = ["icon-iconify", "tailwind", "ui"] }
-top-prompt = "0.1"
+topcoat-prompt = "0.1"
 
 [build-dependencies]
 topcoat = { version = "0.12", default-features = false, features = ["icon-iconify", "tailwind"] }
@@ -155,7 +155,7 @@ async fn installation(cx: &Cx) -> Result<impl View> {
                 " and "
                 <code>"icon-iconify"</code>
                 " features, and the "
-                <code>"top-prompt"</code>
+                <code>"topcoat-prompt"</code>
                 " crate. The crate has no code of its own: it carries the component sources, \
                 and "
                 <code>"topcoat ui"</code>
@@ -188,10 +188,10 @@ async fn installation(cx: &Cx) -> Result<impl View> {
                 ", are installed with them."
             </p>
             command(
-                text: "topcoat ui add prompt_input conversation message --registry top-prompt"
+                text: "topcoat ui add prompt_input conversation message --registry topcoat-prompt"
             )
             <p>"Or install everything at once:"</p>
-            command(text: "topcoat ui add --all --registry top-prompt")
+            command(text: "topcoat ui add --all --registry topcoat-prompt")
             <p>
                 "The sources land in "
                 <code>"src/components/"</code>

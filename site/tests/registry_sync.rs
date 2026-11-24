@@ -1,6 +1,6 @@
-//! Checks that the site installs every top-prompt component and that each installed
+//! Checks that the site installs every topcoat-prompt component and that each installed
 //! file is byte-for-byte the registry source. After changing a component in
-//! `crates/top-prompt`, run `topcoat ui add <name> --registry top-prompt --overwrite`
+//! `crates/topcoat-prompt`, run `topcoat ui add <name> --registry topcoat-prompt --overwrite`
 //! in `site`.
 
 use std::path::Path;
@@ -11,17 +11,17 @@ use topcoat_ui::{
 };
 
 /// The registry's name: the name of the crate that ships it.
-const REGISTRY: &str = "top-prompt";
+const REGISTRY: &str = "topcoat-prompt";
 
 /// The site package's root directory.
 fn package_root() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
 }
 
-/// The top-prompt registry, loaded from its crate in this workspace.
+/// The topcoat-prompt registry, loaded from its crate in this workspace.
 fn registry() -> Registry {
-    Registry::load(package_root().join("../crates/top-prompt"))
-        .expect("the workspace's top-prompt registry loads")
+    Registry::load(package_root().join("../crates/topcoat-prompt"))
+        .expect("the workspace's topcoat-prompt registry loads")
 }
 
 /// What to run when the component `name` has drifted from the registry.
@@ -56,13 +56,14 @@ fn components_match_registry() {
 #[test]
 fn components_are_up_to_date() {
     let package = Package::locate(Some(String::from("site"))).expect("the site is a package");
-    let listings = list(&package, Some(REGISTRY)).expect("the top-prompt registry can be listed");
+    let listings =
+        list(&package, Some(REGISTRY)).expect("the topcoat-prompt registry can be listed");
     let statuses = listings
         .into_iter()
         .next()
-        .expect("listing the top-prompt registry yields it")
+        .expect("listing the topcoat-prompt registry yields it")
         .outcome
-        .expect("the top-prompt registry loads");
+        .expect("the topcoat-prompt registry loads");
 
     for status in statuses {
         let name = &status.name;
