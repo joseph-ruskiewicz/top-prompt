@@ -6,4 +6,6 @@ members = ["crates/top-prompt", "site"]
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
+repository = "https://github.com/joseph-ruskiewicz/top-prompt"
+homepage = "https://top-prompt.fly.dev/"
 rust-version = "1.88"

@@ -6,6 +6,10 @@ categories = ["web-programming"]
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://top-prompt.fly.dev/docs/introduction"
+readme = "../../README.md"
 rust-version.workspace = true
 
 # Declares this crate as a topcoat-ui component registry: `topcoat ui` reads

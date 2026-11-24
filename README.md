@@ -17,7 +17,7 @@ Your app needs Topcoat's `ui`, `tailwind`, and `icon-iconify` features, a theme 
 
 ```sh
 cargo add topcoat --features ui,tailwind,icon-iconify
-cargo add top-prompt          # or a path/git dependency
+cargo add top-prompt
 topcoat ui init --theme neutral
 topcoat ui add message conversation prompt_input --registry top-prompt
 ```
