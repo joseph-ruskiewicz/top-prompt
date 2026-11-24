@@ -6,18 +6,16 @@ use topcoat::{
 
 use crate::components::image::image;
 
-/// An image as a model might return it: base64 data and a media type.
-const GENERATED: &str = "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMjAgMjAwIj48cmVjdCB3aWR0aD0iMzIwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2U3ZTVlNCIvPjxjaXJjbGUgY3g9IjIzNiIgY3k9IjYyIiByPSIyNiIgZmlsbD0iI2ZhZmFmOSIvPjxwYXRoIGQ9Ik0wIDIwMCA5MiA5Nmw1OCA2NiA0MC0zOCAxMzAgNzZ6IiBmaWxsPSIjNzg3MTZjIi8+PHBhdGggZD0iTTAgMjAwIDcwIDE0MGw1MCA2MHoiIGZpbGw9IiM1NzUzNGUiLz48L3N2Zz4=";
+/// Any image URL your app serves. This one is inline, so the example needs no file.
+const HARBOUR: &str = "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' \
+    width='320' height='180' viewBox='0 0 320 180'%3E%3Crect width='320' height='180' fill='%23dbeafe'/%3E\
+    %3Crect y='120' width='320' height='60' fill='%2393c5fd'/%3E%3Cpath d='M70 120h70l-12 \
+    18H82z' fill='%23475569'/%3E%3Cpath d='M104 120V70l30 50z' fill='%23f8fafc'/%3E\
+    %3Ccircle cx='260' cy='48' r='18' fill='%23fde68a'/%3E%3C/svg%3E";
 
 #[component]
 pub async fn example(cx: &Cx) -> Result<impl View> {
     Ok(view! {
-        image(
-            base64: Some(GENERATED),
-            media_type: "image/svg+xml",
-            alt: "Flat illustration of grey hills under a pale sun",
-            width: Some(320),
-            height: Some(200)
-        )
+        image(src: Some(HARBOUR), alt: "A sailing boat in a calm harbour at midday")
     })
 }

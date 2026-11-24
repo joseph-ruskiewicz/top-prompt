@@ -33,7 +33,7 @@ use topcoat::{
 use crate::examples::chat_app::Chat;
 
 /// Where the GitHub links point. A placeholder until the repository is public.
-pub const GITHUB_URL: &str = "https://github.com/";
+pub const GITHUB_URL: &str = "https://github.com/joseph-ruskiewicz/top-prompt";
 
 #[tokio::main]
 async fn main() {

@@ -246,7 +246,7 @@ pub async fn tool_call_output(
             <pre
                 class=(class!(
                     SECTION_BODY,
-                    "bg-destructive/10 text-destructive" if error else "bg-foreground/5",
+                    "bg-destructive/10 text-foreground ring-1 ring-destructive/50 ring-inset" if error else "bg-foreground/5",
                 ))
             >
                 (child)

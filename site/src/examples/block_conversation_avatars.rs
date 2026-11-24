@@ -38,6 +38,8 @@ pub async fn example(cx: &Cx) -> Result<impl View> {
         <div class="flex h-full w-full flex-col">
             conversation(
                 conversation_content(
+                    // An avatar keeps state, so messages with one need a key.
+                    #[key(text)]
                     for (role, text) in MESSAGES {
                         message(
                             role: role,

@@ -9,7 +9,7 @@ hash = "sha256:5e370e648fef95d78c8b048d99be7f7d79fd82132f8c9cc1ce854d3b73024137"
 file = "styles.css"
 
 [registries.top-prompt.components.attachment]
-hash = "sha256:5f883dd9aafd37b742ba0a600af98d3d0c142e3f9a8f124d269dc53529408674"
+hash = "sha256:17cc05238cc463eb9badab1f1228d66b3f5b3a9afc538484429e3297e493aba9"
 file = "src/components/attachment.rs"
 
 [registries.top-prompt.components.branch_picker]
@@ -53,7 +53,7 @@ hash = "sha256:8b3ee995aef9aaf4f686ba3e0f632d73969e6c49e5899c3a6c72cfc4a8e9500e"
 file = "src/components/markdown.rs"
 
 [registries.top-prompt.components.message]
-hash = "sha256:5f8ba5db197e46814b93d4d89cbd1c85e896b56610ae08b1ee139281a2840c17"
+hash = "sha256:81aa9dfadfbbdfa1870c30427755d33a8ac0db028f360392027318907d9b42ae"
 file = "src/components/message.rs"
 
 [registries.top-prompt.components.prompt_input]
@@ -77,7 +77,7 @@ hash = "sha256:b1f20893d0b5f65c6d1e8aae8abfafe45623cb6a5ea92ec59e005c9b522ed54e"
 file = "src/components/suggestion.rs"
 
 [registries.top-prompt.components.system_message]
-hash = "sha256:75fbab6b4d1fa8180af6ee8f065bdf9ac44cafe85de13132361205644d80e97b"
+hash = "sha256:2506b8125ef83bb4b5a01c5d21ae4540f00794b60985fe7dae30b422e0933ade"
 file = "src/components/system_message.rs"
 
 [registries.top-prompt.components.text_shimmer]
@@ -89,7 +89,7 @@ hash = "sha256:cd1d11ce79662e81a5b6cf283dd60f77d3a30ca6f0c158b115259269d9c2f2e2"
 file = "src/components/thinking_bar.rs"
 
 [registries.top-prompt.components.tool_call]
-hash = "sha256:f25d46f874ae1de145ec2231fa22a13dae7be3691952b523f54da09b266db909"
+hash = "sha256:ae7ff34d0ed8db6c384ddb08bcfea906c5179c9522e32d86c8e24f88d2e5e3c2"
 file = "src/components/tool_call.rs"
 
 [registries.topcoat.components.avatar]

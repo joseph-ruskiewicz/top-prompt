@@ -1,6 +1,7 @@
 use topcoat::{
     Result,
     context::Cx,
+    runtime::{Event, signal},
     view::{Attributes, Child, StaticClass, View, attributes, class, component, view},
 };
 
@@ -121,7 +122,9 @@ const AVATAR: StaticClass = class!(
 /// The picture of who wrote a [`message`].
 ///
 /// Shows the image at `src` over `fallback`, such as initials, which stays visible if
-/// the image is missing or cannot load. Uses the built-in `avatar` at its small size.
+/// the image is missing or cannot load. Hiding an image that fails to load needs the
+/// browser runtime. Uses the built-in `avatar` at its small size. Because the avatar
+/// keeps that state, messages with avatars rendered in a loop need a `#[key(...)]`.
 ///
 /// `attrs` are forwarded to the avatar's outer `<span>`. Extra classes are added to its
 /// classes.
@@ -150,6 +153,8 @@ pub async fn message_avatar(
     #[default]
     mut attrs: Attributes,
 ) -> Result<impl View> {
+    let failed = signal(cx, || false);
+
     Ok(view! {
         avatar(
             size: AvatarSize::Sm,
@@ -160,7 +165,16 @@ pub async fn message_avatar(
             },
             avatar_fallback((fallback))
             if let Some(src) = src {
-                avatar_image(alt: alt, attrs: attributes! { src=(src) })
+                // A broken image would cover the initials with the browser's
+                // broken-image icon, so it hides itself.
+                avatar_image(
+                    alt: alt,
+                    attrs: attributes! {
+                        src=(src)
+                        :hidden=$(failed.get())
+                        @error=$(|_e: Event| failed.set(true))
+                    }
+                )
             }
         )
     })
