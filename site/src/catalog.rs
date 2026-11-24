@@ -77,7 +77,23 @@ pub static COMPONENTS: &[ComponentDoc] = &[
         new: false,
         crates: &[],
         source: registry_source!("attachment"),
-        examples: &[example!(attachment_basic, "Attachments")],
+        examples: &[
+            example!(
+                attachment_basic,
+                "Attachments",
+                "Give each chip a `name` and `media_type`; images with a `preview_src` show a thumbnail, and long names are truncated with the full name in a tooltip. A `removable` chip hides itself when its x is clicked."
+            ),
+            example!(
+                attachment_app_state,
+                "Removing files the app owns",
+                "The chip only hides itself, so tell your app the file is gone through `remove_attrs`. Here the click calls a procedure that deletes the upload and returns the files left, and the composer re-renders with the new list and count. Key the chips in the loop."
+            ),
+            example!(
+                attachment_custom,
+                "A chip of your own",
+                "`attachment_remove` is the chip's remove button on its own, for chips that aren't files, such as a pasted link. Its `name` goes into the button's label."
+            ),
+        ],
     },
     ComponentDoc {
         name: "branch_picker",
@@ -86,11 +102,18 @@ pub static COMPONENTS: &[ComponentDoc] = &[
         new: false,
         crates: &[],
         source: registry_source!("branch_picker"),
-        examples: &[example!(
-            branch_picker_basic,
-            "Branch picker",
-            "Put it in a message's actions row, next to the other actions."
-        )],
+        examples: &[
+            example!(
+                branch_picker_basic,
+                "Paging between versions",
+                "Your app keeps the versions and which one is shown; the picker renders the count and the buttons. Wire the buttons through their `attrs`, and disable them at either end. The copy button copies the version on screen."
+            ),
+            example!(
+                branch_picker_regenerate,
+                "Regenerating adds a version",
+                "Regenerate asks the server for another answer, adds it to the list and shows it. The picker appears once there are two versions; `label` names it for screen readers."
+            ),
+        ],
     },
     ComponentDoc {
         name: "chain_of_thought",
@@ -99,7 +122,23 @@ pub static COMPONENTS: &[ComponentDoc] = &[
         new: true,
         crates: &[],
         source: registry_source!("chain_of_thought"),
-        examples: &[example!(chain_of_thought_basic, "Chain of thought")],
+        examples: &[
+            example!(
+                chain_of_thought_basic,
+                "Chain of thought",
+                "Each step is a trigger and its content; `default_open` opens a step at first. The line joins each step to the next."
+            ),
+            example!(
+                chain_of_thought_icons,
+                "Step markers",
+                "`leading_icon` replaces a step's dot, for example with what kind of work it was."
+            ),
+            example!(
+                chain_of_thought_run,
+                "While the model thinks",
+                "Render the steps that have arrived and re-render as more come in, as a live region would. The step in progress opens and its title shimmers. Steps in a loop need a key, so each keeps its own open state."
+            ),
+        ],
     },
     ComponentDoc {
         name: "code_block",
@@ -109,12 +148,25 @@ pub static COMPONENTS: &[ComponentDoc] = &[
         crates: &[],
         source: registry_source!("code_block"),
         examples: &[
-            example!(code_block_basic, "Code block"),
+            example!(
+                code_block_basic,
+                "Code block",
+                "`code` is shown as plain text and copied by the button; `language` labels the header."
+            ),
             example!(
                 code_block_highlighted,
-                "Highlighted",
-                "The component does not highlight code. Highlight it in your app and pass \
-                 the markup as children; the copy button still copies the plain text."
+                "Highlighted code",
+                "Highlight on the server and pass the markup as children. `code` stays the plain text the button copies."
+            ),
+            example!(
+                code_block_plain,
+                "Output without a language",
+                "Without `language` the header gets a generic label. Long lines scroll instead of wrapping, and classes in `attrs` can cap the height."
+            ),
+            example!(
+                code_block_custom,
+                "Your own frame",
+                "`code_block_header` and `code_block_copy` also work on their own, for a block with more actions, such as a download link."
             ),
         ],
     },
@@ -129,9 +181,23 @@ pub static COMPONENTS: &[ComponentDoc] = &[
             example!(
                 conversation_basic,
                 "Conversation",
-                "Scroll up inside the log: it stops following and offers a button back down."
+                "Put messages in a `conversation_content` inside a `conversation` that has a height to fill."
             ),
-            example!(conversation_empty, "Empty state"),
+            example!(
+                conversation_empty,
+                "Empty state",
+                "`conversation_empty_state` takes a `title`, a `description` and any extra content, such as an icon or suggestions."
+            ),
+            example!(
+                conversation_streaming,
+                "Following a streaming reply",
+                "While the reader is at the bottom, new words keep them there; scroll up during the reply and the log stops following and offers a button back down. Set `aria-busy` through `attrs` while streaming."
+            ),
+            example!(
+                conversation_custom_log,
+                "A log of your own",
+                "`conversation` renders its scroll button itself. For another scrolling log, give `conversation_scroll_button` the ID of a reversed column as `target`, and `visible` while the reader is scrolled up."
+            ),
         ],
     },
     ComponentDoc {
@@ -141,7 +207,18 @@ pub static COMPONENTS: &[ComponentDoc] = &[
         new: false,
         crates: &[],
         source: registry_source!("copy_button"),
-        examples: &[example!(copy_button_basic, "Copy button")],
+        examples: &[
+            example!(
+                copy_button_basic,
+                "Copy button",
+                "`text` is what goes on the clipboard and `label` names the button. The icon turns into a check for two seconds."
+            ),
+            example!(
+                copy_button_generated,
+                "Copying something new",
+                "`text` is fixed when the button renders, so render it again when the value changes. Here the server makes a new link and the button copies that one."
+            ),
+        ],
     },
     ComponentDoc {
         name: "feedback_bar",
@@ -150,11 +227,18 @@ pub static COMPONENTS: &[ComponentDoc] = &[
         new: true,
         crates: &[],
         source: registry_source!("feedback_bar"),
-        examples: &[example!(
-            feedback_bar_basic,
-            "Feedback bar",
-            "The buttons carry values; this example thanks the reader and then hides the bar."
-        )],
+        examples: &[
+            example!(
+                feedback_bar_basic,
+                "Feedback bar",
+                "Each button carries a value, `helpful`, `not_helpful` or `close`, so your handler knows which was pressed. Here the choice is acknowledged in the browser."
+            ),
+            example!(
+                feedback_bar_server,
+                "Saving the rating",
+                "Send the value to a procedure and show what it returns. `title` and each button's `label` change the wording."
+            ),
+        ],
     },
     ComponentDoc {
         name: "file_upload",
@@ -163,11 +247,23 @@ pub static COMPONENTS: &[ComponentDoc] = &[
         new: true,
         crates: &[],
         source: registry_source!("file_upload"),
-        examples: &[example!(
-            file_upload_basic,
-            "File upload",
-            "Drop files anywhere on the composer, or use the paperclip button."
-        )],
+        examples: &[
+            example!(
+                file_upload_basic,
+                "Drop zone around a prompt",
+                "Wrap any content: dropped files go into the real file input, which fires `change` as if they had been picked. The trigger opens the picker, and `file_upload_content` shows while files are over the zone."
+            ),
+            example!(
+                file_upload_attachments,
+                "Files as attachment chips",
+                "Copy the input's files into a signal on `change` and render a chip for each. Removing a chip also takes the file out of the input, so the form sends only what is shown."
+            ),
+            example!(
+                file_upload_single,
+                "One image",
+                "`accept` limits the picker and `multiple` off keeps one file; `name` is the form field. The trigger takes the button's `variant` and `size`."
+            ),
+        ],
     },
     ComponentDoc {
         name: "image",
@@ -176,7 +272,23 @@ pub static COMPONENTS: &[ComponentDoc] = &[
         new: true,
         crates: &[],
         source: registry_source!("image"),
-        examples: &[example!(image_basic, "Image")],
+        examples: &[
+            example!(
+                image_basic,
+                "Image",
+                "Pass a `src` URL and an `alt` that describes the image."
+            ),
+            example!(
+                image_base64,
+                "Inline image data",
+                "For images a model returns as data, pass `base64` and its `media_type`. `width` and `height` give the placeholder its shape."
+            ),
+            example!(
+                image_generated,
+                "A generated image in a reply",
+                "A placeholder pulses until the image loads. Here the reply shows a thinking bar while the server makes the image, then the image."
+            ),
+        ],
     },
     ComponentDoc {
         name: "loader",
@@ -186,8 +298,21 @@ pub static COMPONENTS: &[ComponentDoc] = &[
         crates: &[],
         source: registry_source!("loader"),
         examples: &[
-            example!(loader_variants, "Variants"),
-            example!(loader_sizes, "Sizes"),
+            example!(
+                loader_variants,
+                "Variants",
+                "`variant` picks the animation."
+            ),
+            example!(
+                loader_sizes,
+                "Sizes",
+                "`size` scales it: `Sm` next to small text, `Md` in a message, `Lg` in an empty panel."
+            ),
+            example!(
+                loader_waiting,
+                "Until the first token",
+                "Show a loader in the message until text arrives. `label` describes the wait to screen readers, and the Text variants show it."
+            ),
         ],
     },
     ComponentDoc {
@@ -197,12 +322,23 @@ pub static COMPONENTS: &[ComponentDoc] = &[
         new: false,
         crates: &["pulldown-cmark --no-default-features --features html"],
         source: registry_source!("markdown"),
-        examples: &[example!(
-            markdown_basic,
-            "Markdown",
-            "Raw HTML in the source shows as text, and only http, https and mailto links \
-             are kept."
-        )],
+        examples: &[
+            example!(
+                markdown_basic,
+                "Markdown",
+                "Headings, lists, tables, task lists, links and fenced code, rendered on the server."
+            ),
+            example!(
+                markdown_streaming,
+                "Streaming",
+                "Render the text received so far on every update. Half a code fence or half a link renders as far as it goes."
+            ),
+            example!(
+                markdown_untrusted,
+                "Untrusted input",
+                "Model output is safe to pass as it is: HTML stays text, and only http, https and mailto links survive. `attrs` add classes to the wrapper."
+            ),
+        ],
     },
     ComponentDoc {
         name: "message",
@@ -212,11 +348,25 @@ pub static COMPONENTS: &[ComponentDoc] = &[
         crates: &[],
         source: registry_source!("message"),
         examples: &[
-            example!(message_basic, "Messages"),
+            example!(
+                message_basic,
+                "Messages",
+                "`role` sets the layout: users on the right, the assistant full width, system notes centered."
+            ),
+            example!(
+                message_variants,
+                "Content variants",
+                "`Auto`, the default, picks a bubble for users and flat text for the rest. `Bubble` and `Flat` force one look."
+            ),
+            example!(
+                message_avatars,
+                "Avatars",
+                "`src` shows an image over the `fallback` initials, which stay if the image can't load. Give `alt` text when the message doesn't name its author otherwise."
+            ),
             example!(
                 message_actions,
-                "With actions",
-                "Actions show on hover and focus, and always on the last message."
+                "Actions",
+                "Add `message_action` buttons, a copy button or a branch picker. Each action's `label` is its tooltip and name; `side` moves the tooltip. Wire clicks through `attrs`."
             ),
         ],
     },
@@ -228,12 +378,20 @@ pub static COMPONENTS: &[ComponentDoc] = &[
         crates: &[],
         source: registry_source!("prompt_input"),
         examples: &[
-            example!(prompt_input_basic, "Prompt input"),
+            example!(
+                prompt_input_basic,
+                "Prompt input",
+                "Keep the text in a signal and handle `@submit` on the form. Enter submits and Shift+Enter adds a line."
+            ),
             example!(
                 prompt_input_actions,
-                "With actions",
-                "Tool buttons go on the left of the toolbar. Send something to see the button \
-                 turn into Stop."
+                "Tools",
+                "Put `prompt_input_button`s in `prompt_input_tools`: icon buttons need an `aria-label`, and `size: Sm` fits a text label. Send something to see the button turn into Stop."
+            ),
+            example!(
+                prompt_input_status,
+                "Request status",
+                "`status` follows the request: Ready sends, Submitted and Streaming turn the button into Stop, and Error turns it into Retry. Handle Stop with `@click` in `attrs`. Tick the box to see a failure."
             ),
         ],
     },
@@ -244,7 +402,23 @@ pub static COMPONENTS: &[ComponentDoc] = &[
         new: false,
         crates: &[],
         source: registry_source!("reasoning"),
-        examples: &[example!(reasoning_basic, "Reasoning")],
+        examples: &[
+            example!(
+                reasoning_basic,
+                "Reasoning",
+                "While `streaming`, the section is open and shimmers. Afterwards it is closed and shows `duration_secs`."
+            ),
+            example!(
+                reasoning_run,
+                "While it streams",
+                "Re-render as thoughts arrive with `streaming: true`, then once more with `false`: the section closes itself. If the reader opens or closes it meanwhile, that choice is kept."
+            ),
+            example!(
+                reasoning_open,
+                "Open after it finishes",
+                "`reasoning` closes once `streaming` ends. To keep it open, put `reasoning_trigger` and the content in a `<details>` of your own."
+            ),
+        ],
     },
     ComponentDoc {
         name: "sources",
@@ -254,13 +428,31 @@ pub static COMPONENTS: &[ComponentDoc] = &[
         crates: &[],
         source: registry_source!("sources"),
         examples: &[
-            example!(sources_list, "Source list"),
+            example!(
+                sources_list,
+                "Source list",
+                "`sources` shows \"Used N sources\" from `count` and opens to the links. Each `source` shows its `title`, or its URL without one."
+            ),
             example!(
                 sources_chips,
                 "Source chips",
-                "Hover or focus a chip for details."
+                "Hover or focus a chip for its title and description. Without a `label`, a chip shows the host; `show_favicon` adds the site's icon."
             ),
-            example!(sources_citations, "Inline citations"),
+            example!(
+                sources_citations,
+                "Inline citations",
+                "Numbered markers after a claim, with a hover card naming the source."
+            ),
+            example!(
+                sources_answer,
+                "Under an answer",
+                "How the parts sit together in an assistant message: citations in the text, chips under it, and the full list last."
+            ),
+            example!(
+                sources_open,
+                "Open from the start",
+                "For a list that starts open, put `sources_trigger` and the content in a `<details>` of your own."
+            ),
         ],
     },
     ComponentDoc {
@@ -270,7 +462,23 @@ pub static COMPONENTS: &[ComponentDoc] = &[
         new: true,
         crates: &[],
         source: registry_source!("steps"),
-        examples: &[example!(steps_basic, "Steps")],
+        examples: &[
+            example!(
+                steps_basic,
+                "Steps",
+                "A trigger with an optional `leading_icon`, and items beside a bar. `default_open` opens the list at first."
+            ),
+            example!(
+                steps_run,
+                "An agent at work",
+                "Re-render as the agent reports each operation. The icon and shimmering title show it is still running."
+            ),
+            example!(
+                steps_flat,
+                "Without collapsing",
+                "`steps_bar` and `steps_item` work without the collapsible, for a list that is always visible."
+            ),
+        ],
     },
     ComponentDoc {
         name: "suggestion",
@@ -280,12 +488,25 @@ pub static COMPONENTS: &[ComponentDoc] = &[
         crates: &[],
         source: registry_source!("suggestion"),
         examples: &[
-            example!(suggestion_basic, "Suggestions"),
+            example!(
+                suggestion_basic,
+                "Suggestions",
+                "Each suggestion shows its `prompt`, or a shorter `label`."
+            ),
+            example!(
+                suggestion_fill,
+                "Filling the prompt input",
+                "A click handler reads the prompt from the button's value and puts it in the composer."
+            ),
+            example!(
+                suggestion_submit,
+                "Sending without JavaScript",
+                "As submit buttons with a `name` inside a form, suggestions send their prompt with the form."
+            ),
             example!(
                 suggestion_highlight,
-                "Highlight",
-                "With `highlight`, suggestions are full-width rows that emphasize the typed \
-                 text, for autocomplete lists."
+                "Autocomplete",
+                "With `highlight`, a suggestion becomes a full-width row with the typed text emphasized. Here the server filters as you type, and picking a row fills the input."
             ),
         ],
     },
@@ -296,7 +517,18 @@ pub static COMPONENTS: &[ComponentDoc] = &[
         new: true,
         crates: &[],
         source: registry_source!("system_message"),
-        examples: &[example!(system_message_variants, "Variants")],
+        examples: &[
+            example!(
+                system_message_variants,
+                "Variants",
+                "`variant` sets the tone and icon: Action, Warning or Error. `fill` tints the background and `leading_icon` swaps the icon. A `system_message_cta` with an `href` is a link."
+            ),
+            example!(
+                system_message_retry,
+                "Acting on a notice",
+                "The action is a button you wire through `attrs`. Here Retry calls the server and the notice changes with the result."
+            ),
+        ],
     },
     ComponentDoc {
         name: "text_shimmer",
@@ -305,7 +537,18 @@ pub static COMPONENTS: &[ComponentDoc] = &[
         new: true,
         crates: &[],
         source: registry_source!("text_shimmer"),
-        examples: &[example!(text_shimmer_basic, "Text shimmer")],
+        examples: &[
+            example!(
+                text_shimmer_basic,
+                "Text shimmer",
+                "`duration_ms` sets the speed of the sweep and `spread` its width. Size and weight come from classes in `attrs`."
+            ),
+            example!(
+                text_shimmer_status,
+                "A changing status",
+                "Swap the text as the work moves on. Put it in a `role=\"status\"` element so each change is announced."
+            ),
+        ],
     },
     ComponentDoc {
         name: "thinking_bar",
@@ -314,7 +557,18 @@ pub static COMPONENTS: &[ComponentDoc] = &[
         new: true,
         crates: &[],
         source: registry_source!("thinking_bar"),
-        examples: &[example!(thinking_bar_basic, "Thinking bar")],
+        examples: &[
+            example!(
+                thinking_bar_basic,
+                "Thinking bar",
+                "`text` shimmers. With a `stop_label`, a button follows it; wire it in `stop_attrs`."
+            ),
+            example!(
+                thinking_bar_stop,
+                "Answering early",
+                "Stop tells the server to answer with what the model has. Here the short answer replaces the bar."
+            ),
+        ],
     },
     ComponentDoc {
         name: "tool_call",
@@ -323,7 +577,23 @@ pub static COMPONENTS: &[ComponentDoc] = &[
         new: false,
         crates: &[],
         source: registry_source!("tool_call"),
-        examples: &[example!(tool_call_statuses, "Statuses")],
+        examples: &[
+            example!(
+                tool_call_statuses,
+                "Statuses",
+                "`status` sets the badge. `tool_call_output` with `error: true` labels a failure."
+            ),
+            example!(
+                tool_call_run,
+                "A call in progress",
+                "Render the card again with each new status. If the reader opened it, it stays open. `tool_call_input` takes a `label` for its heading."
+            ),
+            example!(
+                tool_call_open,
+                "Open from the start",
+                "For a card that starts open, build it around `tool_call_header`, which shows the name and status badge."
+            ),
+        ],
     },
 ];
 
@@ -536,6 +806,78 @@ mod tests {
         for doc in COMPONENTS {
             assert!(!doc.examples.is_empty(), "{} has no example", doc.name);
         }
+    }
+
+    /// Every public part, prop and enum variant on a component's API tables shows up in
+    /// at least one of the page's examples.
+    ///
+    /// The check reads source text: a part counts as used when `name(` appears, a prop
+    /// when `prop:` does, and a variant when `Enum::Variant` does. That can be fooled by a
+    /// prop of the same name on another part, but it does not depend on formatting, and
+    /// it fails as soon as a new prop or variant is added without an example. `attrs` is
+    /// on every part, so it only has to appear once per page.
+    #[test]
+    fn examples_use_every_part_prop_and_variant() {
+        let mut gaps = Vec::new();
+        for doc in COMPONENTS {
+            let examples: String = doc.examples.iter().map(|example| example.source).collect();
+            for function in crate::api::functions(doc.source) {
+                if !examples.contains(&format!("{}(", function.name)) {
+                    gaps.push(format!(
+                        "{}: `{}` is in no example",
+                        doc.name, function.name
+                    ));
+                }
+                for prop in function.props {
+                    let ignored = matches!(prop.name.as_str(), "attrs" | "children");
+                    if !ignored && !examples.contains(&format!("{}:", prop.name)) {
+                        gaps.push(format!(
+                            "{}: `{}` prop `{}`",
+                            doc.name, function.name, prop.name
+                        ));
+                    }
+                }
+            }
+            if !examples.contains("attrs:") {
+                gaps.push(format!("{}: no example passes `attrs`", doc.name));
+            }
+            for (name, variants) in enums(doc.source) {
+                for variant in variants {
+                    if !examples.contains(&format!("{name}::{variant}")) {
+                        gaps.push(format!(
+                            "{}: `{name}::{variant}` is in no example",
+                            doc.name
+                        ));
+                    }
+                }
+            }
+        }
+        assert!(
+            gaps.is_empty(),
+            "undemonstrated features:\n{}",
+            gaps.join("\n")
+        );
+    }
+
+    /// The public enums of a component source and their variants.
+    fn enums(source: &str) -> Vec<(&str, Vec<&str>)> {
+        source
+            .split("\npub enum ")
+            .skip(1)
+            .filter_map(|rest| {
+                let (name, body) = rest.split_once(" {")?;
+                let body = &body[..body.find("\n}")?];
+                let variants = body
+                    .lines()
+                    .map(str::trim)
+                    .filter(|line| {
+                        !line.is_empty() && !line.starts_with("///") && !line.starts_with('#')
+                    })
+                    .map(|line| line.trim_end_matches(','))
+                    .collect();
+                Some((name, variants))
+            })
+            .collect()
     }
 
     #[test]

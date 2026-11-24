@@ -17,6 +17,10 @@ pub async fn example(cx: &Cx) -> Result<impl View> {
                     the recipe by two and swap the beef for lentils…"
                 )
             )
+            // Without a duration, the trigger reads "Thought for a few seconds".
+            reasoning(
+                reasoning_content("Kyoto in late March: cherry blossom, so book early.")
+            )
             reasoning(
                 duration_secs: Some(6),
                 reasoning_content(

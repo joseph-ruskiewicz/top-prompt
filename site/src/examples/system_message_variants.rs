@@ -11,7 +11,11 @@ use crate::components::system_message::{SystemMessageVariant, system_message, sy
 pub async fn example(cx: &Cx) -> Result<impl View> {
     Ok(view! {
         <div class="flex w-full flex-col gap-3">
-            system_message("This conversation is shared with your team.")
+            // Action is the default variant.
+            system_message(
+                variant: SystemMessageVariant::Action,
+                "This conversation is shared with your team."
+            )
             system_message(
                 fill: true,
                 leading_icon: Some(iconify_icon!("lucide:sparkles")),
@@ -21,7 +25,11 @@ pub async fn example(cx: &Cx) -> Result<impl View> {
             system_message(
                 variant: SystemMessageVariant::Warning,
                 "You have 3 messages left today."
-                system_message_cta(attrs: attributes! { href="#" }, "See plans")
+                // With an `href`, the action is a link.
+                system_message_cta(
+                    attrs: attributes! { href="/docs/system_message" },
+                    "See plans"
+                )
             )
             system_message(
                 variant: SystemMessageVariant::Error,

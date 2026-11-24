@@ -2,6 +2,7 @@ use topcoat::{
     Result,
     context::Cx,
     icon::{IconData, icon, iconify::iconify_icon},
+    runtime::{Event, signal},
     view::{Attributes, Child, View, attributes, class, component, view},
 };
 
@@ -64,10 +65,12 @@ fn file_icon(media_type: &str) -> IconData {
 ///
 /// Images with a `preview_src` show a thumbnail; other files show an icon chosen from
 /// `media_type`, such as `application/pdf`. Long names are truncated, with the full
-/// name in a tooltip. Set `removable` to add an [`attachment_remove`] button, then
-/// attach its behavior through `remove_attrs`, such as an `@click` handler or
-/// `type="submit"` with `name` and `value` for a form. The chip only displays files;
-/// uploading them is the app's job.
+/// name in a tooltip. Set `removable` to add an [`attachment_remove`] button: clicking
+/// it hides the chip. The chip only displays files, so tell your app the file is gone
+/// through `remove_attrs`, such as an `@click` handler that calls a procedure or
+/// updates a signal; it runs before the chip hides. Uploading files is the app's job.
+///
+/// In a loop, key the iterations (`#[key(file.id)]`) so each chip keeps its own state.
 ///
 /// `attrs` are forwarded to the `<li>`. Extra classes are added to its classes.
 #[component]
@@ -92,10 +95,13 @@ pub async fn attachment(
     mut attrs: Attributes,
 ) -> Result<impl View> {
     let is_image = media_type.starts_with("image/");
+    // Set when the reader removes the chip, so it stays hidden across later renders.
+    let removed = signal(cx, || false);
 
     Ok(view! {
         <li
             title=(name)
+            :hidden=$(removed.get())
             class=(class!(
                 "flex max-w-64 items-center gap-2 rounded-lg border border-border",
                 "bg-background p-1 text-sm text-foreground",
@@ -122,7 +128,11 @@ pub async fn attachment(
             }
             <span class="min-w-0 flex-1 truncate">(name)</span>
             if removable {
-                attachment_remove(name: name, attrs: remove_attrs)
+                // The click bubbles up from the button, after any handler the app put
+                // on it through `remove_attrs`.
+                <span class="contents" @click=$(|_e: Event| removed.set(true))>
+                    attachment_remove(name: name, attrs: remove_attrs)
+                </span>
             }
         </li>
     })

@@ -19,7 +19,7 @@ pub enum SystemMessageVariant {
     /// Something the reader should know before going on. The theme has no warning
     /// color, so warnings use the foreground color and a warning icon.
     Warning,
-    /// Something failed. Uses the theme's `destructive` color.
+    /// Something failed. The icon and border use the theme's `destructive` color.
     Error,
 }
 
@@ -42,10 +42,15 @@ impl SystemMessageVariant {
             (Self::Warning, true) => {
                 class!("border-foreground/15 bg-foreground/10 text-foreground")
             }
-            (Self::Error, false) => class!("border-destructive/40 text-destructive"),
-            (Self::Error, true) => {
-                class!("border-transparent bg-destructive/10 text-destructive")
+            // The message stays in the foreground color so it is readable on the tint;
+            // the icon and border carry the destructive color.
+            (Self::Error, false) => {
+                class!("border-destructive/50 text-foreground [&>svg]:text-destructive")
             }
+            (Self::Error, true) => class!(
+                "border-destructive/50 bg-destructive/10 text-foreground",
+                "[&>svg]:text-destructive",
+            ),
         }
     }
 }
