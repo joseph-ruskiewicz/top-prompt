@@ -1,0 +1,92 @@
+# The checks every change must pass: the same ones run by hand before a release.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A newer push to a pull request cancels its run in progress. Runs on main are never
+# cancelled, so a deploy is not stopped halfway.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  TOPCOAT_CLI_VERSION: 0.12.1
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # rust-toolchain.toml selects stable; add the lint and format tools to it.
+      - name: Install the toolchain
+        run: |
+          rustup component add clippy rustfmt
+          rustc --version
+          cargo --version
+
+      # Dependencies and build output, keyed on Cargo.lock and the toolchain.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-bin: "false"
+
+      # The topcoat CLI is only needed for `topcoat fmt`. It is installed into its own
+      # directory and cached by version, so it is compiled once.
+      - name: Cache the topcoat CLI
+        id: topcoat-cli
+        uses: actions/cache@v4
+        with:
+          path: ~/.topcoat-cli
+          key: topcoat-cli-${{ env.TOPCOAT_CLI_VERSION }}-${{ runner.os }}
+      - name: Install the topcoat CLI
+        if: steps.topcoat-cli.outputs.cache-hit != 'true'
+        run: cargo install topcoat-cli --version "$TOPCOAT_CLI_VERSION" --locked --root ~/.topcoat-cli
+      - name: Put the topcoat CLI on the path
+        run: echo "$HOME/.topcoat-cli/bin" >> "$GITHUB_PATH"
+
+      - name: cargo fmt
+        run: cargo fmt --check
+      # cargo fmt skips the registry sources, which no crate compiles as modules.
+      - name: rustfmt (registry components)
+        run: rustfmt --check crates/top-prompt/src/components/*.rs
+      - name: topcoat fmt (site)
+        working-directory: site
+        run: topcoat fmt --check
+      - name: topcoat fmt (registry)
+        working-directory: crates/top-prompt
+        run: topcoat fmt --check
+
+      # site/build.rs downloads Tailwind and the Lucide icons; the script retries only
+      # when that build script fails (see the script for why).
+      - name: cargo build
+        run: .github/scripts/cargo-retry.sh cargo build --workspace
+      - name: cargo clippy
+        run: .github/scripts/cargo-retry.sh cargo clippy --workspace --all-targets -- -D warnings
+      - name: cargo test
+        run: .github/scripts/cargo-retry.sh cargo test --workspace
+
+  # Deploys main to Fly.io once the checks pass. Pull requests never reach this job, so
+  # their runs never see the token.
+  deploy:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # One deploy at a time: a second merge waits for the first to finish.
+    concurrency:
+      group: fly-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      # Builds the Dockerfile on Fly's builders and deploys with fly.toml.
+      - name: Deploy
+        run: flyctl deploy --remote-only --ha=false
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

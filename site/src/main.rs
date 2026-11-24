@@ -20,6 +20,7 @@ use topcoat::{
     Result,
     asset::{AssetBundle, RouterBuilderAssetExt},
     context::Cx,
+    cookie::CookieLayer,
     font::fontsource::fontsource_font,
     icon::{icon, iconify::iconify_icon},
     router::{
@@ -42,6 +43,7 @@ async fn main() {
         .with(Chat::default())
         .discover()
         .layer(RuntimeLayer::new())
+        .layer(CookieLayer::new())
         .build();
 
     topcoat::start(router).await.unwrap();
@@ -51,8 +53,10 @@ async fn main() {
 /// docs shell with the sidebar.
 #[layout]
 async fn layout(cx: &Cx, slot: Slot<'_>) -> Result<impl View> {
-    // Runtime links keep signals the pages share, so the theme survives navigation.
-    let dark = signal(cx, || false);
+    // Runtime links keep signals the pages share, so the theme survives navigation. A
+    // full load starts from the theme cookie, light when there is none.
+    let saved = shell::dark_from_cookie(cx);
+    let dark = signal(cx, || saved);
     let path = uri(cx).path().to_owned();
     let full = path.starts_with("/full/");
 
