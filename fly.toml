@@ -1,6 +1,6 @@
 # Fly.io: one small machine for the docs site. It stops when idle and starts on the
 # next request; the demo chat keeps its state in memory, so a stop clears it.
-app = "top-prompt"
+app = "topcoat-prompt"
 primary_region = "sjc"
 
 [env]

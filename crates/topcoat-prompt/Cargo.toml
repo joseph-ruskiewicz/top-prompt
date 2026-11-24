@@ -8,7 +8,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-documentation = "https://top-prompt.fly.dev/docs/introduction"
+documentation = "https://topcoat-prompt.fly.dev/docs/introduction"
 readme = "../../README.md"
 rust-version.workspace = true
 
