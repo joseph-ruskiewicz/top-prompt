@@ -1,6 +1,6 @@
 [package]
-name = "top-prompt"
-description = "AI chat components for Topcoat, installed with `topcoat ui add --registry top-prompt`."
+name = "topcoat-prompt"
+description = "AI chat components for Topcoat, installed with `topcoat ui add --registry topcoat-prompt`."
 keywords = ["topcoat", "ui", "chat", "ai", "components"]
 categories = ["web-programming"]
 version.workspace = true

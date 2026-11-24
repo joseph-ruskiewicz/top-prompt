@@ -7,14 +7,14 @@ use topcoat::{
 /// The keyframes of the sweep. Tailwind ships no shimmer animation, so the component
 /// brings its own; every shimmer on a page shares the name, and repeating the rule is
 /// harmless.
-const KEYFRAMES: &str = "@keyframes top-prompt-shimmer { from { background-position: 100% 0; } \
+const KEYFRAMES: &str = "@keyframes topcoat-prompt-shimmer { from { background-position: 100% 0; } \
                          to { background-position: 0% 0; } }";
 
 /// Classes that clip the gradient to the text. With reduced motion the highlight
 /// stands still.
 const SHIMMER: StaticClass = class!(
     "inline-block bg-size-[250%_100%] bg-clip-text bg-no-repeat text-transparent",
-    "animate-[top-prompt-shimmer_linear_infinite] motion-reduce:animate-none",
+    "animate-[topcoat-prompt-shimmer_linear_infinite] motion-reduce:animate-none",
 );
 
 /// Muted text with a highlight sweeping across it, for "Thinking", "Searching the

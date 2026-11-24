@@ -18,7 +18,7 @@ pub async fn page(cx: &Cx) -> Result<impl View> {
     Ok(view! {
         page_header(
             title: "Blocks",
-            description: "Larger examples built from top-prompt and Topcoat components. Copy \
+            description: "Larger examples built from topcoat-prompt and Topcoat components. Copy \
                 one into your app as a starting point."
         )
         <div class="mt-12 flex flex-col gap-14">

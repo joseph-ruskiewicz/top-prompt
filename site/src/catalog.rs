@@ -61,7 +61,7 @@ macro_rules! example {
 macro_rules! registry_source {
     ($name:literal) => {
         include_str!(concat!(
-            "../../crates/top-prompt/src/components/",
+            "../../crates/topcoat-prompt/src/components/",
             $name,
             ".rs"
         ))
@@ -680,12 +680,12 @@ pub fn block(slug: &str) -> Option<&'static Block> {
 pub enum Dependency {
     /// A built-in Topcoat component.
     BuiltIn(String),
-    /// Another top-prompt component.
+    /// Another topcoat-prompt component.
     Local(String),
 }
 
 /// The registry manifest, read for component dependencies.
-const REGISTRY: &str = include_str!("../../crates/top-prompt/registry.toml");
+const REGISTRY: &str = include_str!("../../crates/topcoat-prompt/registry.toml");
 
 /// The dependencies `registry.toml` lists for the component `name`.
 pub fn dependencies(name: &str) -> Vec<Dependency> {
@@ -753,19 +753,19 @@ pub fn pages() -> Vec<Page> {
 /// `/llms.txt`: an index of the docs for language models.
 pub fn llms_txt() -> String {
     let mut out = String::from(
-        "# top-prompt\n\n\
+        "# topcoat-prompt\n\n\
          > Chat interface components for Topcoat, the Rust web framework. Components are \
-         installed into an app as source with `topcoat ui add <name> --registry top-prompt` \
+         installed into an app as source with `topcoat ui add <name> --registry topcoat-prompt` \
          and render on the server; interactive parts use the Topcoat runtime.\n\n\
          ## Docs\n\n\
-         - [Introduction](/docs/introduction): what top-prompt is and how it works\n\
+         - [Introduction](/docs/introduction): what topcoat-prompt is and how it works\n\
          - [Installation](/docs/installation): adding the registry and installing components\n\
          - [Blocks](/blocks): larger composed examples, including a full chat app\n\n\
          ## Components\n\n",
     );
     for doc in COMPONENTS {
         out.push_str(&format!(
-            "- [{}](/docs/{}): {} Install: `topcoat ui add {} --registry top-prompt`\n",
+            "- [{}](/docs/{}): {} Install: `topcoat ui add {} --registry topcoat-prompt`\n",
             doc.title, doc.name, doc.description, doc.name
         ));
     }
@@ -794,8 +794,8 @@ mod tests {
     #[test]
     fn every_registry_component_has_a_page_with_an_example() {
         let registry =
-            Registry::load(Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates/top-prompt"))
-                .expect("the workspace's top-prompt registry loads");
+            Registry::load(Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates/topcoat-prompt"))
+                .expect("the workspace's topcoat-prompt registry loads");
         let registry: BTreeSet<&str> = registry.names().collect();
         let documented: BTreeSet<&str> = COMPONENTS.iter().map(|doc| doc.name).collect();
 

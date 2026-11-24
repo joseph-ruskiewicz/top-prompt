@@ -4,7 +4,7 @@
 //! Add this crate as a dependency, then install components into your app:
 //!
 //! ```sh
-//! topcoat ui add message --registry top-prompt
+//! topcoat ui add message --registry topcoat-prompt
 //! ```
 //!
 //! The crate itself has no runtime code. `registry.toml` names the component sources

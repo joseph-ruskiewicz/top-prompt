@@ -1,10 +1,12 @@
-# top-prompt
+# topcoat-prompt
 
 AI chat components for [Topcoat](https://github.com/tokio-rs/topcoat): a conversation
 log that sticks to the bottom while it streams, messages, a prompt input, server-rendered
 markdown, reasoning, tool calls, sources, and more.
 
-top-prompt is a `topcoat ui` component registry. Components are copied into your app as
+topcoat-prompt is a community project, not part of Topcoat or maintained by tokio-rs.
+
+topcoat-prompt is a `topcoat ui` component registry. Components are copied into your app as
 source you own, like the built-in components, and use the built-in neutral theme's tokens,
 so they match the rest of your UI in light and dark mode. They are presentational: your
 app owns the conversation state and talks to the model.
@@ -17,20 +19,20 @@ Your app needs Topcoat's `ui`, `tailwind`, and `icon-iconify` features, a theme 
 
 ```sh
 cargo add topcoat --features ui,tailwind,icon-iconify
-cargo add top-prompt
+cargo add topcoat-prompt
 topcoat ui init --theme neutral
-topcoat ui add message conversation prompt_input --registry top-prompt
+topcoat ui add message conversation prompt_input --registry topcoat-prompt
 ```
 
 `topcoat ui` only offers registries that are direct dependencies of your app, which is
-why `top-prompt` is in `[dependencies]`. The crate contains no code, so it adds nothing
+why `topcoat-prompt` is in `[dependencies]`. The crate contains no code, so it adds nothing
 to your binary.
 
-Built-in components a top-prompt component uses (button, tooltip, avatar, badge, …) are
+Built-in components a topcoat-prompt component uses (button, tooltip, avatar, badge, …) are
 installed from the built-in registry automatically. To install everything:
 
 ```sh
-topcoat ui add --all --registry top-prompt
+topcoat ui add --all --registry topcoat-prompt
 ```
 
 The `markdown` component renders with pulldown-cmark, which your app adds itself:
@@ -136,19 +138,19 @@ is. Stop cancels the task; Regenerate adds a branch.
 
 ## Development
 
-Component sources live in `crates/top-prompt/src/components` and are listed in
-`crates/top-prompt/registry.toml`. The registry crate does not compile them; the site
+Component sources live in `crates/topcoat-prompt/src/components` and are listed in
+`crates/topcoat-prompt/registry.toml`. The registry crate does not compile them; the site
 does. After changing a component, copy it into the site:
 
 ```sh
 cd site
-topcoat ui add <name> --registry top-prompt --overwrite
+topcoat ui add <name> --registry topcoat-prompt --overwrite
 ```
 
 `cargo test --workspace` fails if an installed copy differs from the registry source, a
 registry component is not installed, or a prop has no doc comment. The component files
 are not part of the registry crate's module tree, so `cargo fmt` does not reach them;
-format them with `rustfmt --edition 2024 crates/top-prompt/src/components/*.rs` and
+format them with `rustfmt --edition 2024 crates/topcoat-prompt/src/components/*.rs` and
 `topcoat fmt`.
 
 ## License

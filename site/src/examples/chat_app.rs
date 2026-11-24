@@ -771,7 +771,7 @@ impl Script {
                  your draft, focus, scroll position, and open sections survive. Try opening \
                  the reasoning above while this streams.\n\n\
                  ```sh\n\
-                 topcoat ui add --all --registry top-prompt\n\
+                 topcoat ui add --all --registry topcoat-prompt\n\
                  ```\n\n\
                  - [x] Reasoning\n\
                  - [x] Tool call\n\

@@ -150,7 +150,7 @@ async fn logo(cx: &Cx) -> Result<impl View> {
                     attrs: attributes! { class="size-4" }
                 )
             </span>
-            "top-prompt"
+            "topcoat-prompt"
         )
     })
 }
@@ -521,7 +521,7 @@ fn inline_code(text: &str) -> Unescaped<String> {
 /// The Installation section of a component page: CLI and Manual tabs.
 #[component]
 pub async fn install_section(cx: &Cx, doc: &'static ComponentDoc) -> Result<impl View> {
-    let add = format!("topcoat ui add {} --registry top-prompt", doc.name);
+    let add = format!("topcoat ui add {} --registry topcoat-prompt", doc.name);
     let mut built_ins = Vec::new();
     let mut locals = Vec::new();
     for dependency in catalog::dependencies(doc.name) {
@@ -565,7 +565,7 @@ pub async fn install_section(cx: &Cx, doc: &'static ComponentDoc) -> Result<impl
                         if !locals.is_empty() {
                             <li class="space-y-3 pl-1">
                                 <p>
-                                    "Install the top-prompt components it uses, the same way:"
+                                    "Install the topcoat-prompt components it uses, the same way:"
                                 </p>
                                 <ul class="flex flex-wrap gap-2">
                                     for name in &locals {
