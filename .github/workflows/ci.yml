@@ -23,7 +23,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # rust-toolchain.toml selects stable; add the lint and format tools to it.
       - name: Install the toolchain
@@ -41,7 +41,7 @@ jobs:
       # directory and cached by version, so it is compiled once.
       - name: Cache the topcoat CLI
         id: topcoat-cli
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.topcoat-cli
           key: topcoat-cli-${{ env.TOPCOAT_CLI_VERSION }}-${{ runner.os }}
@@ -83,8 +83,8 @@ jobs:
       group: fly-deploy
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: actions/checkout@v7
+      - uses: superfly/flyctl-actions/setup-flyctl@98172f70657cb3e15db199af139be99bd3e61200 # master, 2026-10-30 (node24)
       # Builds the Dockerfile on Fly's builders and deploys with fly.toml.
       - name: Deploy
         run: flyctl deploy --remote-only --ha=false
