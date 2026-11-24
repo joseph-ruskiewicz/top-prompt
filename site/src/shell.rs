@@ -4,8 +4,9 @@
 use topcoat::{
     Result,
     context::Cx,
+    cookie::{Cookie, Cookies, SameSite, cookies, time::Duration},
     icon::{icon, iconify::iconify_icon},
-    runtime::{Event, Signal, link, signal},
+    runtime::{Event, Signal, link, procedure, signal},
     view::{Attributes, Child, StaticClass, Unescaped, View, attributes, class, component, view},
 };
 
@@ -19,6 +20,31 @@ use crate::{
     },
     highlight,
 };
+
+/// The name of the cookie that remembers the theme.
+const THEME_COOKIE: &str = "theme";
+
+/// Whether the request's theme cookie asks for the dark theme. The layout reads it so
+/// the first HTML already has the right class, with no flash of the other theme.
+pub fn dark_from_cookie(cx: &Cx) -> bool {
+    cookies(cx)
+        .get(THEME_COOKIE)
+        .is_some_and(|cookie| cookie.value() == "dark")
+}
+
+/// Remembers the reader's theme for a year. The procedure's response carries the
+/// `Set-Cookie` header, so no navigation is needed.
+#[procedure]
+async fn save_theme(cx: &Cx, dark: bool) -> Result<()> {
+    cookies(cx).add(
+        Cookie::build((THEME_COOKIE, if dark { "dark" } else { "light" }))
+            .path("/")
+            .max_age(Duration::days(365))
+            .same_site(SameSite::Lax)
+            .http_only(true),
+    );
+    Ok(())
+}
 
 /// The sidebar and the content column around a page.
 #[component]
@@ -184,7 +210,11 @@ async fn sidebar_body(cx: &Cx, path: &str, dark: Signal<bool>) -> Result<impl Vi
             <button
                 type="button"
                 class=(NAV_LINK)
-                @click=$(|_e: Event| dark.toggle())
+                @click=$(async |_e: Event| {
+                    // The theme switches at once; the cookie is saved in the background.
+                    dark.toggle();
+                    save_theme(dark.get()).await;
+                })
                 :aria-label=(label)
             >
                 <span class="contents" :hidden=$(!dark.get())>
