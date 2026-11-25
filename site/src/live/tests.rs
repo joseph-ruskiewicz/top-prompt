@@ -462,6 +462,23 @@ async fn switching_provider_clears_key_and_conversation() {
 }
 
 #[tokio::test]
+async fn a_swapped_key_names_its_provider_and_sends_nothing() {
+    let (fake, demo) = setup().await;
+    for (provider, key, named) in [
+        (Provider::OpenAi, KEY_A, "an Anthropic key"),
+        (Provider::Anthropic, OPENAI_KEY, "an OpenAI key"),
+    ] {
+        let visitor = demo.visitor(&session()).unwrap();
+        visitor.set_provider(provider);
+        let message = visitor.set_key(key).unwrap_err();
+        assert!(message.contains(named), "{message}");
+        assert!(!visitor.snapshot().has_key);
+        assert!(!visitor.send(&demo, "[text] hi", ip(31)));
+    }
+    assert_eq!(fake.requests().len(), 0);
+}
+
+#[tokio::test]
 async fn switching_provider_mid_stream_stops_the_reply() {
     let (_fake, demo) = setup().await;
     let visitor = visitor(&demo, KEY_A);

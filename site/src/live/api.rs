@@ -2,7 +2,7 @@
 //! errors and the updates a stream produces for the page. The wire formats are in
 //! the adapter modules, [`super::anthropic`] and [`super::openai`].
 
-use std::{fmt, time::Duration};
+use std::time::Duration;
 
 use reqwest::header::HeaderValue;
 use serde_json::Value;
@@ -330,7 +330,11 @@ impl ApiError {
             ErrorKind::RequestTooLarge => {
                 "The conversation is too large to send. Clear it and start again.".to_owned()
             }
-            ErrorKind::InvalidRequest => "The API rejected the request.".to_owned(),
+            // Most likely something in the conversation the API will not take, which
+            // every later request would repeat.
+            ErrorKind::InvalidRequest => {
+                "The API rejected the request. Clear the conversation and try again.".to_owned()
+            }
             ErrorKind::Other(kind) => format!("The API returned an error ({kind})."),
         };
         let code = match status {
@@ -354,12 +358,6 @@ impl ApiError {
                 ..
             }
         )
-    }
-}
-
-impl fmt::Display for ApiError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.explain(Model::default()))
     }
 }
 
@@ -419,5 +417,21 @@ mod tests {
         assert_eq!(anthropic::PRODUCTION_URL, "https://api.anthropic.com");
         assert_eq!(openai::PRODUCTION_URL, "https://api.openai.com");
         assert!(!Endpoint::production(Provider::OpenAi).is_production(Provider::Anthropic));
+    }
+
+    #[test]
+    fn a_rejected_request_says_to_clear_the_conversation() {
+        let key = ApiKey::parse(Provider::OpenAi, "sk-proj-test-key-0123456789abcdef").unwrap();
+        let error = ApiError::api(Some(400), ErrorKind::InvalidRequest, "bad", None, &key);
+        for model in Model::ALL {
+            let text = error.explain(model);
+            assert!(
+                text.starts_with(
+                    "The API rejected the request. Clear the conversation and try again."
+                ),
+                "{text}"
+            );
+            assert!(text.ends_with("(400): bad"), "{text}");
+        }
     }
 }

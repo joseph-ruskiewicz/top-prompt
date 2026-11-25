@@ -624,11 +624,9 @@ mod tests {
             key.expose()
         );
         let error = parse_error(Some(401), &body, None, &key);
-        for printed in [
-            error.explain(Model::Opus),
-            format!("{error}"),
-            format!("{error:?}"),
-        ] {
+        // Every model's notice, and the debug form.
+        let notices = Model::ALL.map(|model| error.explain(model));
+        for printed in notices.into_iter().chain([format!("{error:?}")]) {
             assert!(!printed.contains(key.expose()), "{printed}");
         }
         assert!(error.is_key_problem());

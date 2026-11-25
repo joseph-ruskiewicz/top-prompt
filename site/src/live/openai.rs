@@ -171,8 +171,9 @@ fn kind_for(status: Option<u16>, code: Option<&str>, error_type: Option<&str>) -
         Some(503) => ErrorKind::Overloaded,
         Some(504) => ErrorKind::Timeout,
         Some(_) => ErrorKind::Api,
-        // An error in a stream has no status; its code says what happened.
-        None => match code.or(error_type) {
+        // An error in a stream has no status; its code says what happened. An `error`
+        // event's top-level `type` is the event name, not an error type.
+        None => match code.or(error_type.filter(|name| *name != "error")) {
             None | Some("server_error") => ErrorKind::Api,
             Some("rate_limit_exceeded" | "rate_limit_error" | "slow_down") => ErrorKind::RateLimit,
             Some("server_is_overloaded" | "service_unavailable_error") => ErrorKind::Overloaded,
@@ -447,9 +448,29 @@ impl Accumulator {
         Some(Finished {
             outcome,
             calls,
-            items: self.items.values().cloned().collect(),
+            items: self.items.values().map(replayable).collect(),
         })
     }
+}
+
+/// `item` as it goes back in later requests. A function call whose arguments are not
+/// a JSON object gets `{}` instead, as the Anthropic adapter does, so the API cannot
+/// reject every later request in the conversation over them. The call's
+/// [`ToolCall::input`] keeps the raw text, so the model still gets an INVALID_JSON
+/// result.
+fn replayable(item: &Value) -> Value {
+    let mut item = item.clone();
+    if item["type"] == "function_call" {
+        let valid = item
+            .get("arguments")
+            .and_then(Value::as_str)
+            .and_then(|raw| serde_json::from_str::<Value>(raw).ok())
+            .is_some_and(|input| input.is_object());
+        if !valid {
+            item["arguments"] = json!("{}");
+        }
+    }
+    item
 }
 
 /// A function call's arguments: a JSON object, or `Err` with the raw text. Empty
@@ -734,8 +755,31 @@ mod tests {
             finished.calls[0].input,
             Err("{\"expression\": \"1+".to_owned())
         );
-        // The item goes back as the API returned it.
-        assert_eq!(finished.items[0]["arguments"], "{\"expression\": \"1+");
+        // The item goes back with empty arguments, so later requests stay valid; the
+        // model still gets the INVALID_JSON tool result for the call.
+        assert_eq!(finished.items[0]["arguments"], "{}");
+        assert_eq!(finished.items[0]["call_id"], "call_2345abc");
+    }
+
+    #[test]
+    fn stores_valid_arguments_as_returned() {
+        let mut events = function_call(0, "{\"expression\": \"1+1\"}");
+        events.push(completed());
+        let (response, _, error) = run(&stream(&events));
+        assert_eq!(error, None);
+        let finished = response.finished().unwrap();
+        assert_eq!(finished.items[0]["arguments"], "{\"expression\": \"1+1\"}");
+    }
+
+    #[test]
+    fn an_error_event_without_a_code_is_an_api_error() {
+        let body = json!({"type": "error", "code": null, "message": "m", "param": null,
+            "sequence_number": 4})
+        .to_string();
+        let ApiError::Api { kind, .. } = parse_error(None, &body, None, &key()) else {
+            panic!("an API error");
+        };
+        assert_eq!(kind, ErrorKind::Api);
     }
 
     #[test]
@@ -919,11 +963,9 @@ mod tests {
             "type": "invalid_request_error", "code": "invalid_api_key"}})
         .to_string();
         let error = parse_error(Some(401), &body, None, &key);
-        for printed in [
-            error.explain(Model::Sol),
-            format!("{error}"),
-            format!("{error:?}"),
-        ] {
+        // Every model's notice, and the debug form.
+        let notices = Model::ALL.map(|model| error.explain(model));
+        for printed in notices.into_iter().chain([format!("{error:?}")]) {
             assert!(!printed.contains(key.expose()), "{printed}");
             assert!(!printed.contains(tail), "{printed}");
         }

@@ -124,8 +124,12 @@ impl ApiKey {
                 } else {
                     run[j - 1] + 1
                 };
-                if run[j] >= SCRUB_RUN {
-                    hidden[i + 1 - run[j]..=i].fill(true);
+                // The run's earlier bytes were hidden when it reached `SCRUB_RUN`, so
+                // a longer run only adds this byte.
+                if run[j] == SCRUB_RUN {
+                    hidden[i + 1 - SCRUB_RUN..=i].fill(true);
+                } else if run[j] > SCRUB_RUN {
+                    hidden[i] = true;
                 }
             }
         }
@@ -277,5 +281,25 @@ mod tests {
         assert_eq!(key.scrub(&KEY[..30]), "[redacted]");
         // Text around the key keeps its characters, multi-byte ones included.
         assert_eq!(key.scrub(&format!("é{KEY}ü")), "é[redacted]ü");
+    }
+
+    #[test]
+    fn scrubs_with_a_repetitive_key() {
+        // The longest key allowed, nearly all one character: every text byte of a run
+        // of `a` matches every key position.
+        let raw = format!("sk-ant-{}", "a".repeat(MAX_LEN - 7));
+        let key = ApiKey::parse(Provider::Anthropic, &raw).unwrap();
+        assert_eq!(key.scrub("xaaaaaaay"), "xaaaaaaay");
+        assert_eq!(key.scrub("xaaaaaaaay"), "x[redacted]y");
+        assert_eq!(key.scrub(&format!("x{raw}y")), "x[redacted]y");
+        let long = format!("start {} end", "a".repeat(60_000));
+        let started = std::time::Instant::now();
+        assert_eq!(key.scrub(&long), "start [redacted] end");
+        // Linear in the text: far under the time the old window refill took.
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(2),
+            "{:?}",
+            started.elapsed()
+        );
     }
 }
