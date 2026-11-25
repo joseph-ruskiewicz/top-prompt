@@ -12,12 +12,13 @@ use topcoat::{
 };
 
 use super::{
-    api::{Endpoint, MAX_TOKENS, Model},
+    api::{Endpoint, MAX_TOKENS},
     chat::{
         Demo, IDLE_TIMEOUT, IP_REQUESTS, MAX_TURNS, Part, ReplyState, ReplyView, Snapshot,
         VISITOR_REQUESTS, Visitor,
     },
     fake::FakeApi,
+    provider::{Model, Provider},
 };
 use crate::components::{prompt_input::PromptStatus, tool_call::ToolStatus};
 
@@ -436,6 +437,55 @@ async fn rejects_input_outside_the_limits() {
 }
 
 #[tokio::test]
+async fn switching_provider_clears_key_and_conversation() {
+    let (_fake, demo) = setup().await;
+    let visitor = visitor(&demo, KEY_A);
+    assert!(visitor.send(&demo, "[text] hi", ip(30)));
+    assert_eq!(settle(&visitor).await.turns.len(), 1);
+
+    assert!(visitor.set_provider(Provider::OpenAi));
+    let snapshot = visitor.snapshot();
+    assert!(!snapshot.has_key);
+    assert!(snapshot.turns.is_empty());
+    assert_eq!(snapshot.provider, Provider::OpenAi);
+    assert_eq!(snapshot.model.provider(), Provider::OpenAi);
+    assert_eq!(snapshot.model, Provider::OpenAi.default_model());
+    // Choosing the same provider again changes nothing.
+    assert!(!visitor.set_provider(Provider::OpenAi));
+    // Keys are now checked against OpenAI's shape.
+    assert!(visitor.set_key(KEY_A).is_err());
+}
+
+#[tokio::test]
+async fn switching_provider_mid_stream_stops_the_reply() {
+    let (_fake, demo) = setup().await;
+    let visitor = visitor(&demo, KEY_A);
+    assert!(visitor.send(&demo, "[slow] go", ip(31)));
+    wait_for(&visitor, |snapshot| {
+        snapshot.status == PromptStatus::Streaming
+    })
+    .await;
+    assert!(visitor.set_provider(Provider::OpenAi));
+    // The old task makes no late changes.
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    let snapshot = visitor.snapshot();
+    assert!(snapshot.turns.is_empty());
+    assert_eq!(snapshot.status, PromptStatus::Ready);
+    assert!(!snapshot.has_key);
+}
+
+#[tokio::test]
+async fn models_from_the_other_provider_are_rejected() {
+    let (_fake, demo) = setup().await;
+    let visitor = visitor(&demo, KEY_A);
+    let before = visitor.snapshot().model;
+    let openai = Model::for_provider(Provider::OpenAi).next().unwrap();
+    assert!(!visitor.set_model(openai));
+    assert_eq!(visitor.snapshot().model, before);
+    assert_eq!(before.provider(), Provider::Anthropic);
+}
+
+#[tokio::test]
 async fn caps_turns_and_requests() {
     let (fake, demo) = setup().await;
     let visitor = visitor(&demo, KEY_A);
@@ -648,7 +698,10 @@ async fn the_key_never_appears_in_pages_or_printed_state() {
             ));
         }
     }
-    printed.push(format!("{:?}", super::key::ApiKey::parse(KEY_A).unwrap()));
+    printed.push(format!(
+        "{:?}",
+        super::key::ApiKey::parse(Provider::Anthropic, KEY_A).unwrap()
+    ));
     for text in printed {
         assert!(!text.contains(KEY_A), "{text}");
     }

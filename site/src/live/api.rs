@@ -9,7 +9,7 @@ use std::{collections::HashMap, fmt, time::Duration};
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde_json::{Value, json};
 
-use super::{key::ApiKey, sse, tools};
+use super::{key::ApiKey, provider::Model, sse, tools};
 
 /// The API version the requests and the parsing are written against.
 pub const API_VERSION: &str = "2026-10-21";
@@ -20,40 +20,6 @@ pub const MAX_TOKENS: u32 = 8192;
 
 /// The only host the key is ever sent to in a release build.
 pub const PRODUCTION_URL: &str = "https://api.anthropic.com";
-
-/// The models a visitor can pick. Anything else from the browser is rejected.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Model {
-    Opus,
-    #[default]
-    Sonnet,
-    Haiku,
-}
-
-impl Model {
-    pub const ALL: [Self; 3] = [Self::Opus, Self::Sonnet, Self::Haiku];
-
-    pub fn id(self) -> &'static str {
-        match self {
-            Self::Opus => "claude-opus-5-5",
-            Self::Sonnet => "claude-sonnet-5-5",
-            Self::Haiku => "claude-haiku-5-5",
-        }
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Opus => "Claude Opus 5.5",
-            Self::Sonnet => "Claude Sonnet 5.5",
-            Self::Haiku => "Claude Haiku 5.5",
-        }
-    }
-
-    /// The model with the id `id`, if it is on the list.
-    pub fn from_id(id: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|model| model.id() == id)
-    }
-}
 
 /// Where requests go. Only debug builds and tests can point it anywhere but the
 /// production API, and only from the server's environment or test code, never
@@ -628,9 +594,14 @@ fn append(block: &mut Value, field: &str, text: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::live::provider::Provider;
 
     fn key() -> ApiKey {
-        ApiKey::parse("sk-ant-api03-test-key-0123456789abcdef").unwrap()
+        ApiKey::parse(
+            Provider::Anthropic,
+            "sk-ant-api03-test-key-0123456789abcdef",
+        )
+        .unwrap()
     }
 
     /// Feeds a stream through the parser and the accumulator.
@@ -865,16 +836,6 @@ mod tests {
         for tool in body["tools"].as_array().unwrap() {
             assert_eq!(tool["eager_input_streaming"], true);
         }
-    }
-
-    #[test]
-    fn only_listed_models_are_accepted() {
-        assert_eq!(Model::from_id("claude-sonnet-5-5"), Some(Model::Sonnet));
-        assert_eq!(Model::from_id("claude-opus-5-5"), Some(Model::Opus));
-        assert_eq!(Model::from_id("claude-haiku-5-5"), Some(Model::Haiku));
-        assert_eq!(Model::from_id("claude-fable-5-2"), None);
-        assert_eq!(Model::from_id(""), None);
-        assert_eq!(Model::default(), Model::Sonnet);
     }
 
     #[test]

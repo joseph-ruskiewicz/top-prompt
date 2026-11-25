@@ -17,11 +17,12 @@ use topcoat::{
 };
 
 use super::{
-    api::{MAX_TOKENS, Model},
+    api::MAX_TOKENS,
     chat::{
         Demo, IDLE_TIMEOUT, MAX_MESSAGE_LEN, MAX_TURNS, Notice, Part, ReplyState, ReplyView,
         Snapshot, TurnView, VISITOR_REQUESTS, Visitor,
     },
+    provider::Model,
 };
 use crate::components::{
     branch_picker::{
@@ -265,7 +266,7 @@ async fn chat_panel(cx: &Cx, snapshot: Snapshot, draft: Signal<String>) -> Resul
                     set_model(e.target.value).await;
                 })
             >
-                for model in Model::ALL {
+                for model in Model::for_provider(current_model.provider()) {
                     <option value=(model.id()) selected=(model == current_model)>
                         (model.label())
                     </option>

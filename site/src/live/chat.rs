@@ -16,8 +16,9 @@ use tokio::{sync::broadcast, task::AbortHandle, time::sleep};
 use topcoat::session::TokenHash;
 
 use super::{
-    api::{self, Accumulator, ApiError, Model, Update},
+    api::{self, Accumulator, ApiError, Update},
     key::{ApiKey, KeyError},
+    provider::{Model, Provider},
     tools,
 };
 use crate::components::{prompt_input::PromptStatus, tool_call::ToolStatus};
@@ -219,6 +220,8 @@ pub struct Visitor {
 struct State {
     /// Held in memory only. Never cloned out except into the generation task.
     key: Option<Arc<ApiKey>>,
+    /// Whose API the key is for. The model always belongs to it.
+    provider: Provider,
     model: Model,
     turns: Vec<Turn>,
     next_id: u64,
@@ -259,6 +262,8 @@ struct Reply {
 #[derive(Clone, Default)]
 pub struct Snapshot {
     pub has_key: bool,
+    #[allow(dead_code, reason = "the page shows it once it has a provider picker")]
+    pub provider: Provider,
     pub model: Model,
     pub turns: Vec<TurnView>,
     pub status: PromptStatus,
@@ -359,7 +364,8 @@ impl Visitor {
         Self {
             state: Mutex::new(State {
                 key: None,
-                model: Model::default(),
+                provider: Provider::default(),
+                model: Provider::default().default_model(),
                 turns: Vec::new(),
                 next_id: 0,
                 generation: None,
@@ -398,6 +404,7 @@ impl Visitor {
         };
         Snapshot {
             has_key: state.key.is_some(),
+            provider: state.provider,
             model: state.model,
             turns: state
                 .turns
@@ -418,10 +425,11 @@ impl Visitor {
         }
     }
 
-    /// Stores a key the visitor entered. `Err` is a message for the page.
+    /// Stores a key the visitor entered, checked against the current provider. `Err`
+    /// is a message for the page.
     pub fn set_key(&self, raw: &str) -> Result<(), &'static str> {
-        let key = ApiKey::parse(raw).map_err(KeyError::message)?;
         let mut state = self.state.lock().unwrap();
+        let key = ApiKey::parse(state.provider, raw).map_err(KeyError::message)?;
         state.key = Some(Arc::new(key));
         state.last_seen = Instant::now();
         drop(state);
@@ -442,9 +450,32 @@ impl Visitor {
         self.notify();
     }
 
+    /// Switches provider. The key and the conversation belong to the old one, so
+    /// they go, and any reply being generated stops. Returns whether it changed.
+    #[allow(dead_code, reason = "the page calls it once it has a provider picker")]
+    pub fn set_provider(&self, provider: Provider) -> bool {
+        let mut state = self.state.lock().unwrap();
+        if state.provider == provider {
+            return false;
+        }
+        // Taking the generation makes any late update from its task a no-op.
+        if let Some(generation) = state.generation.take() {
+            generation.handle.abort();
+        }
+        state.provider = provider;
+        state.model = provider.default_model();
+        state.key = None;
+        state.turns.clear();
+        drop(state);
+        self.notify();
+        true
+    }
+
+    /// Picks the model for the next replies. Only the current provider's models,
+    /// and not while a reply is being generated.
     pub fn set_model(&self, model: Model) -> bool {
         let mut state = self.state.lock().unwrap();
-        if state.generation.is_some() {
+        if state.generation.is_some() || model.provider() != state.provider {
             return false;
         }
         state.model = model;

@@ -13,6 +13,7 @@ pub mod cookie;
 #[cfg(any(test, debug_assertions))]
 pub mod fake;
 pub mod key;
+pub mod provider;
 pub mod sse;
 pub mod tools;
 pub mod view;

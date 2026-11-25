@@ -1,30 +1,37 @@
-//! The visitor's Anthropic API key, kept out of every printed form.
+//! The visitor's API key, kept out of every printed form.
 
 use std::fmt;
 
-/// The prefix of every Anthropic API key.
-const PREFIX: &str = "sk-ant-";
+use super::provider::Provider;
 
-/// The longest key accepted, in bytes. Real keys are about a hundred.
+/// The prefix of every Anthropic API key.
+const ANTHROPIC_PREFIX: &str = "sk-ant-";
+
+/// The prefix of every OpenAI API key (project, service account or legacy user).
+const OPENAI_PREFIX: &str = "sk-";
+
+/// The longest key accepted, in bytes. Real keys are a few hundred at most.
 const MAX_LEN: usize = 256;
 
-/// An Anthropic API key a visitor entered.
+/// An API key a visitor entered, for one provider.
 ///
 /// `Debug` and `Display` print `[redacted]`, so the key cannot reach a log line, an
 /// error message or a panic through formatting. It is not `Clone`, `Serialize` or
 /// `Deserialize`: share it behind an `Arc`, and the only way to read it is
-/// [`expose`](Self::expose), which the HTTP client calls to set the `x-api-key`
-/// header. The bytes are overwritten when the key is dropped.
+/// [`expose`](Self::expose), which the HTTP client calls to set the auth header.
+/// The bytes are overwritten when the key is dropped.
 pub struct ApiKey(String);
 
 /// Why a key was rejected before any request was made.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum KeyError {
     Empty,
-    /// It does not start with `sk-ant-`.
-    Prefix,
+    /// It does not start with the selected provider's prefix.
+    Prefix(Provider),
+    /// It is the other provider's key.
+    WrongProvider(Provider),
     /// It is too long, or has spaces or other characters keys do not use.
-    Shape,
+    Shape(Provider),
 }
 
 impl KeyError {
@@ -32,35 +39,63 @@ impl KeyError {
     pub fn message(self) -> &'static str {
         match self {
             Self::Empty => "Paste a key first.",
-            Self::Prefix => "Anthropic API keys start with sk-ant-.",
-            Self::Shape => "That does not look like an Anthropic API key.",
+            Self::Prefix(Provider::Anthropic) => "Anthropic API keys start with sk-ant-.",
+            Self::Prefix(Provider::OpenAi) => "OpenAI API keys start with sk-.",
+            Self::WrongProvider(Provider::Anthropic) => {
+                "That looks like an Anthropic key. Switch the provider above, or paste an OpenAI key."
+            }
+            Self::WrongProvider(Provider::OpenAi) => {
+                "That looks like an OpenAI key. Switch the provider above, or paste an Anthropic key."
+            }
+            Self::Shape(Provider::Anthropic) => "That does not look like an Anthropic API key.",
+            Self::Shape(Provider::OpenAi) => "That does not look like an OpenAI API key.",
         }
     }
 }
 
+/// The provider whose prefix `key` carries, if any.
+fn provider_of(key: &str) -> Option<Provider> {
+    if key.starts_with(ANTHROPIC_PREFIX) {
+        Some(Provider::Anthropic)
+    } else if key.starts_with(OPENAI_PREFIX) {
+        Some(Provider::OpenAi)
+    } else {
+        None
+    }
+}
+
+fn prefix(provider: Provider) -> &'static str {
+    match provider {
+        Provider::Anthropic => ANTHROPIC_PREFIX,
+        Provider::OpenAi => OPENAI_PREFIX,
+    }
+}
+
 impl ApiKey {
-    /// Checks the shape of a pasted key. Surrounding whitespace is ignored. This does
-    /// not check that the key works; the first request does.
-    pub fn parse(raw: &str) -> Result<Self, KeyError> {
+    /// Checks the shape of a key pasted for `provider`. Surrounding whitespace is
+    /// ignored. This does not check that the key works; the first request does.
+    pub fn parse(provider: Provider, raw: &str) -> Result<Self, KeyError> {
         let key = raw.trim();
         if key.is_empty() {
             return Err(KeyError::Empty);
         }
-        if !key.starts_with(PREFIX) {
-            return Err(KeyError::Prefix);
+        match provider_of(key) {
+            None => return Err(KeyError::Prefix(provider)),
+            Some(other) if other != provider => return Err(KeyError::WrongProvider(other)),
+            Some(_) => {}
         }
         let shaped = key.len() <= MAX_LEN
-            && key.len() > PREFIX.len() + 8
+            && key.len() > prefix(provider).len() + 8
             && key
                 .bytes()
                 .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_');
         if !shaped {
-            return Err(KeyError::Shape);
+            return Err(KeyError::Shape(provider));
         }
         Ok(Self(key.to_owned()))
     }
 
-    /// The key itself, for the `x-api-key` header and nothing else.
+    /// The key itself, for the auth header and nothing else.
     pub(super) fn expose(&self) -> &str {
         &self.0
     }
@@ -104,7 +139,7 @@ mod tests {
 
     #[test]
     fn formatting_never_shows_the_key() {
-        let key = ApiKey::parse(KEY).unwrap();
+        let key = ApiKey::parse(Provider::Anthropic, KEY).unwrap();
         for printed in [
             format!("{key}"),
             format!("{key:?}"),
@@ -119,27 +154,72 @@ mod tests {
 
     #[test]
     fn checks_the_shape() {
-        assert_eq!(ApiKey::parse("  ").unwrap_err(), KeyError::Empty);
         assert_eq!(
-            ApiKey::parse("sk-proj-abcdefghijklmnop").unwrap_err(),
-            KeyError::Prefix
-        );
-        assert_eq!(ApiKey::parse("sk-ant-short").unwrap_err(), KeyError::Shape);
-        assert_eq!(
-            ApiKey::parse("sk-ant-api03-has a space in it").unwrap_err(),
-            KeyError::Shape
+            ApiKey::parse(Provider::Anthropic, "  ").unwrap_err(),
+            KeyError::Empty
         );
         assert_eq!(
-            ApiKey::parse(&format!("sk-ant-{}", "a".repeat(300))).unwrap_err(),
-            KeyError::Shape
+            ApiKey::parse(Provider::Anthropic, "key-abcdefghijklmnop").unwrap_err(),
+            KeyError::Prefix(Provider::Anthropic)
         );
-        let key = ApiKey::parse(&format!("  {KEY}\n")).unwrap();
+        assert_eq!(
+            ApiKey::parse(Provider::Anthropic, "sk-ant-short").unwrap_err(),
+            KeyError::Shape(Provider::Anthropic)
+        );
+        assert_eq!(
+            ApiKey::parse(Provider::Anthropic, "sk-ant-api03-has a space in it").unwrap_err(),
+            KeyError::Shape(Provider::Anthropic)
+        );
+        assert_eq!(
+            ApiKey::parse(Provider::Anthropic, &format!("sk-ant-{}", "a".repeat(300))).unwrap_err(),
+            KeyError::Shape(Provider::Anthropic)
+        );
+        let key = ApiKey::parse(Provider::Anthropic, &format!("  {KEY}\n")).unwrap();
         assert_eq!(key.expose(), KEY);
     }
 
     #[test]
+    fn openai_keys_parse() {
+        let key = ApiKey::parse(Provider::OpenAi, "sk-proj-abcdefghijklmnopqrstuvwx").unwrap();
+        assert_eq!(key.expose(), "sk-proj-abcdefghijklmnopqrstuvwx");
+        assert_eq!(
+            ApiKey::parse(Provider::OpenAi, "pk-proj-abcdefghijklmnopqrstuvwx").unwrap_err(),
+            KeyError::Prefix(Provider::OpenAi)
+        );
+        assert_eq!(
+            ApiKey::parse(Provider::OpenAi, "sk-short").unwrap_err(),
+            KeyError::Shape(Provider::OpenAi)
+        );
+    }
+
+    #[test]
+    fn swapped_keys_name_their_provider() {
+        assert_eq!(
+            ApiKey::parse(Provider::OpenAi, KEY).unwrap_err(),
+            KeyError::WrongProvider(Provider::Anthropic)
+        );
+        assert_eq!(
+            ApiKey::parse(Provider::Anthropic, "sk-proj-abcdefghijklmnopqrstuvwx").unwrap_err(),
+            KeyError::WrongProvider(Provider::OpenAi)
+        );
+        assert_eq!(
+            KeyError::WrongProvider(Provider::Anthropic).message(),
+            "That looks like an Anthropic key. Switch the provider above, or paste an OpenAI key."
+        );
+        assert_eq!(
+            KeyError::WrongProvider(Provider::OpenAi).message(),
+            "That looks like an OpenAI key. Switch the provider above, or paste an Anthropic key."
+        );
+        assert!(
+            KeyError::Prefix(Provider::Anthropic)
+                .message()
+                .contains("sk-ant-")
+        );
+    }
+
+    #[test]
     fn scrubs_copies_from_text() {
-        let key = ApiKey::parse(KEY).unwrap();
+        let key = ApiKey::parse(Provider::Anthropic, KEY).unwrap();
         assert_eq!(key.scrub(&format!("bad key {KEY}!")), "bad key [redacted]!");
     }
 }
