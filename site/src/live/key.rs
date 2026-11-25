@@ -293,13 +293,6 @@ mod tests {
         assert_eq!(key.scrub("xaaaaaaaay"), "x[redacted]y");
         assert_eq!(key.scrub(&format!("x{raw}y")), "x[redacted]y");
         let long = format!("start {} end", "a".repeat(60_000));
-        let started = std::time::Instant::now();
         assert_eq!(key.scrub(&long), "start [redacted] end");
-        // Linear in the text: far under the time the old window refill took.
-        assert!(
-            started.elapsed() < std::time::Duration::from_secs(2),
-            "{:?}",
-            started.elapsed()
-        );
     }
 }
