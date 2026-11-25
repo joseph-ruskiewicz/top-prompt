@@ -148,13 +148,12 @@ fn calculate(expression: &str) -> Result<String, String> {
     if !value.is_finite() {
         return Err("The result is not a finite number.".to_owned());
     }
-    // Whole numbers print without a fraction; others with up to 12 significant
-    // decimals, trailing zeros trimmed.
-    if value.fract() == 0.0 && value.abs() < 1e15 {
-        return Ok(format!("{value:.0}"));
-    }
-    let text = format!("{value:.12}");
-    Ok(text.trim_end_matches('0').trim_end_matches('.').to_owned())
+    // Round to 15 significant digits, which f64 holds exactly, then print the
+    // shortest form: 0.1 + 0.2 is 0.3, not 0.30000000000000004.
+    let rounded: f64 = format!("{value:.14e}")
+        .parse()
+        .map_err(|_| "The result is not a finite number.".to_owned())?;
+    Ok(format!("{rounded}"))
 }
 
 /// A recursive-descent parser: sum → product → unary → power → atom.
@@ -272,7 +271,9 @@ mod tests {
     #[test]
     fn calculates() {
         assert_eq!(calc("6 * 7").unwrap(), "42");
-        assert_eq!(calc("(17.5 * 4) / 3").unwrap(), "23.333333333333");
+        assert_eq!(calc("(17.5 * 4) / 3").unwrap(), "23.3333333333333");
+        assert_eq!(calc("1234 * 5678 / 9").unwrap(), "778516.888888889");
+        assert_eq!(calc("2^60").unwrap(), "1152921504606850000");
         assert_eq!(calc("2^3^2").unwrap(), "512");
         assert_eq!(calc("-2^2").unwrap(), "-4");
         assert_eq!(calc("10 % 4 - -1").unwrap(), "3");

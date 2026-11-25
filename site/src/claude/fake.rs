@@ -274,9 +274,14 @@ fn script(body: &Value) -> Script {
     let mut stream = Stream::default();
     if let Some(result) = tool_result {
         stream.thinking("The tool answered, so I can reply with its result.");
-        let first = result.lines().next().unwrap_or_default();
+        // A one-line summary: the calculator's number, or the size of a search result.
+        let summary = if result.lines().count() == 1 {
+            format!("`{result}`")
+        } else {
+            format!("{} lines", result.lines().count())
+        };
         stream.text(&format!(
-            "The tool returned `{first}`. That answers the question."
+            "The tool returned {summary}. That answers the question."
         ));
         stream.end("end_turn");
     } else if text.contains("[midstream]") {
