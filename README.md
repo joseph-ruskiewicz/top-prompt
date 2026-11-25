@@ -137,6 +137,12 @@ tool call that runs and completes, then markdown with a code block and sources. 
 region only observes the conversation, so reloading the page picks the stream up where it
 is. Stop cancels the task; Regenerate adds a branch.
 
+The **Live model demo** (`/full/live`) runs the same chat on a real model with the
+visitor's own Anthropic or OpenAI API key. The key goes to the site's server in one
+request, is held only in memory for that visitor's session and is sent only to the chosen
+provider's API. Every message is billed to the visitor's account. For local work, a debug
+build started with `DEMO_FAKE_API=1` answers both providers from a local fake instead.
+
 ## Development
 
 Component sources live in `crates/topcoat-prompt/src/components` and are listed in

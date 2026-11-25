@@ -1,197 +1,41 @@
-//! The Messages API over HTTPS: the request, the streamed response and its errors.
+//! The Anthropic Messages API: the request, its headers, the streamed response and
+//! its errors.
 //!
 //! There is no official Rust SDK, so this follows the raw HTTP API: a `POST` to
 //! `/v1/messages` with `stream: true`, read as server-sent events. Event and error
 //! shapes follow the Claude API docs ("Streaming messages" and "Claude API errors").
 
-use std::{collections::HashMap, fmt, time::Duration};
+use std::collections::HashMap;
 
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde_json::{Value, json};
 
-use super::{key::ApiKey, sse, tools};
+use super::{
+    api::{ApiError, ErrorKind, MAX_TOKENS, SYSTEM_PROMPT, Update},
+    key::ApiKey,
+    provider::{Finished, Model, Outcome, ToolCall},
+    sse, tools,
+};
 
 /// The API version the requests and the parsing are written against.
 pub const API_VERSION: &str = "2026-10-21";
 
-/// The cap on each response, thinking included. The visitor pays for it, so it is
-/// modest; a longer answer stops with a note.
-pub const MAX_TOKENS: u32 = 8192;
-
-/// The only host the key is ever sent to in a release build.
+/// The only Anthropic host the key is ever sent to in a release build.
 pub const PRODUCTION_URL: &str = "https://api.anthropic.com";
 
-/// The models a visitor can pick. Anything else from the browser is rejected.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Model {
-    Opus,
-    #[default]
-    Sonnet,
-    Haiku,
-}
+/// The path requests are sent to, under the endpoint's base URL.
+pub const PATH: &str = "/v1/messages";
 
-impl Model {
-    pub const ALL: [Self; 3] = [Self::Opus, Self::Sonnet, Self::Haiku];
-
-    pub fn id(self) -> &'static str {
-        match self {
-            Self::Opus => "claude-opus-5-5",
-            Self::Sonnet => "claude-sonnet-5-5",
-            Self::Haiku => "claude-haiku-5-5",
-        }
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Opus => "Claude Opus 5.5",
-            Self::Sonnet => "Claude Sonnet 5.5",
-            Self::Haiku => "Claude Haiku 5.5",
-        }
-    }
-
-    /// The model with the id `id`, if it is on the list.
-    pub fn from_id(id: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|model| model.id() == id)
-    }
-}
-
-/// Where requests go. Only debug builds and tests can point it anywhere but the
-/// production API, and only from the server's environment or test code, never
-/// from anything a browser sends.
-#[derive(Clone, Debug)]
-pub struct Endpoint(String);
-
-impl Endpoint {
-    pub fn production() -> Self {
-        Self(PRODUCTION_URL.to_owned())
-    }
-
-    /// The production API, or in a debug build the `DEMO_ANTHROPIC_BASE_URL`
-    /// environment variable when it is set.
-    pub fn from_env() -> Self {
-        #[cfg(debug_assertions)]
-        if let Ok(url) = std::env::var("DEMO_ANTHROPIC_BASE_URL") {
-            return Self(url.trim_end_matches('/').to_owned());
-        }
-        Self::production()
-    }
-
-    /// A local stand-in for the API, such as the fake server.
-    #[cfg(any(test, debug_assertions))]
-    pub fn local(url: &str) -> Self {
-        Self(url.trim_end_matches('/').to_owned())
-    }
-
-    pub fn is_production(&self) -> bool {
-        self.0 == PRODUCTION_URL
-    }
-}
-
-/// The HTTP client.
-#[derive(Clone)]
-pub struct Client {
-    http: reqwest::Client,
-    endpoint: Endpoint,
-}
-
-impl Client {
-    pub fn new(endpoint: Endpoint) -> Self {
-        // reqwest is built without a crypto provider; this installs ring. It fails
-        // only if a provider is already installed, which is just as good.
-        let _ = rustls::crypto::ring::default_provider().install_default();
-        let http = reqwest::Client::builder()
-            // A redirect would carry the x-api-key header to wherever it points;
-            // the API does not redirect, so none are followed.
-            .redirect(reqwest::redirect::Policy::none())
-            // Proxy settings in the environment are ignored: the key goes straight
-            // to the API.
-            .no_proxy()
-            .https_only(endpoint.is_production())
-            .connect_timeout(Duration::from_secs(10))
-            // Thinking can leave the stream quiet for a while, though the API sends
-            // pings; a minute of silence means it is gone.
-            .read_timeout(Duration::from_secs(60))
-            .user_agent("topcoat-prompt-demo")
-            .build()
-            .expect("the HTTP client builds");
-        Self { http, endpoint }
-    }
-
-    /// Sends a streaming request and returns the response once its status is a
-    /// success, or the error the API returned.
-    pub async fn stream(&self, key: &ApiKey, body: &Value) -> Result<Stream, ApiError> {
-        let mut headers = HeaderMap::new();
-        let mut key_header =
-            HeaderValue::from_str(key.expose()).map_err(|_| ApiError::transport())?;
-        // Sensitive values print as `Sensitive` in reqwest's and http's Debug output.
-        key_header.set_sensitive(true);
-        headers.insert("x-api-key", key_header);
-        headers.insert("anthropic-version", HeaderValue::from_static(API_VERSION));
-        headers.insert("content-type", HeaderValue::from_static("application/json"));
-
-        let response = self
-            .http
-            .post(format!("{}/v1/messages", self.endpoint.0))
-            .headers(headers)
-            .body(body.to_string())
-            .send()
-            .await
-            .map_err(|_| ApiError::transport())?;
-
-        let status = response.status();
-        if status.is_success() {
-            return Ok(Stream {
-                response,
-                parser: sse::Parser::default(),
-            });
-        }
-        let retry_after = response
-            .headers()
-            .get("retry-after")
-            .and_then(|value| value.to_str().ok())
-            .and_then(|value| value.trim().parse().ok());
-        let body = read_capped(response, 64 * 1024).await;
-        Err(ApiError::from_response(
-            status.as_u16(),
-            &body,
-            retry_after,
-            key,
-        ))
-    }
-}
-
-/// Reads at most `limit` bytes of an error body.
-async fn read_capped(mut response: reqwest::Response, limit: usize) -> String {
-    let mut body = Vec::new();
-    while let Ok(Some(chunk)) = response.chunk().await {
-        body.extend_from_slice(&chunk);
-        if body.len() >= limit {
-            body.truncate(limit);
-            break;
-        }
-    }
-    String::from_utf8_lossy(&body).into_owned()
-}
-
-/// A response being streamed.
-pub struct Stream {
-    response: reqwest::Response,
-    parser: sse::Parser,
-}
-
-impl Stream {
-    /// The events in the next chunk, or `None` at the end of the stream.
-    pub async fn next(&mut self) -> Result<Option<Vec<sse::Event>>, ApiError> {
-        match self.response.chunk().await {
-            Ok(Some(chunk)) => self
-                .parser
-                .feed(&chunk)
-                .map(Some)
-                .map_err(|_| ApiError::protocol()),
-            Ok(None) => Ok(None),
-            Err(_) => Err(ApiError::transport()),
-        }
-    }
+/// The headers that authenticate a request and pick the API version. The key's
+/// header is marked sensitive, so it prints as `Sensitive` in reqwest's and http's
+/// `Debug` output.
+pub fn headers(key: &ApiKey) -> Result<HeaderMap, ApiError> {
+    let mut headers = HeaderMap::new();
+    let mut key_header = HeaderValue::from_str(key.expose()).map_err(|_| ApiError::Transport)?;
+    key_header.set_sensitive(true);
+    headers.insert("x-api-key", key_header);
+    headers.insert("anthropic-version", HeaderValue::from_static(API_VERSION));
+    Ok(headers)
 }
 
 /// The request body for one step of a conversation.
@@ -209,260 +53,113 @@ pub fn request_body(model: Model, messages: &[Value]) -> Value {
     })
 }
 
-const SYSTEM_PROMPT: &str = "You are the assistant in a live demo of topcoat-prompt, a \
-library of chat interface components for Topcoat, a Rust web framework. The page shows \
-your reasoning, your tool calls and your Markdown answer with the library's components. \
-Answer concisely. You have two tools: search_components looks up topcoat-prompt \
-components by keyword, and calculate evaluates arithmetic exactly. Use them when they \
-help answer.";
-
-/// The kinds of error the API documents, by `error.type`.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ErrorKind {
-    /// 400 `invalid_request_error`, also used for a spend limit the organization set.
-    InvalidRequest,
-    /// 401 `authentication_error`: a malformed, revoked or expired key.
-    Authentication,
-    /// 402 `billing_error`, such as no credit left.
-    Billing,
-    /// 403 `permission_error`.
-    Permission,
-    /// 404 `not_found_error`, including a model the organization cannot use.
-    NotFound,
-    /// 413 `request_too_large`.
-    RequestTooLarge,
-    /// 429 `rate_limit_error`, including the usage tier's monthly spend cap.
-    RateLimit,
-    /// 500 `api_error`.
-    Api,
-    /// 504 `timeout_error`.
-    Timeout,
-    /// 529 `overloaded_error`.
-    Overloaded,
-    /// A type the docs may add later.
-    Other(String),
+/// A user message with `text`.
+pub fn user_items(text: &str) -> Vec<Value> {
+    vec![json!({ "role": "user", "content": [{ "type": "text", "text": text }] })]
 }
 
-impl ErrorKind {
-    fn from_type(error_type: &str) -> Self {
-        match error_type {
-            "invalid_request_error" => Self::InvalidRequest,
-            "authentication_error" => Self::Authentication,
-            "billing_error" => Self::Billing,
-            "permission_error" => Self::Permission,
-            "not_found_error" => Self::NotFound,
-            "request_too_large" => Self::RequestTooLarge,
-            "rate_limit_error" => Self::RateLimit,
-            "api_error" => Self::Api,
-            "timeout_error" => Self::Timeout,
-            "overloaded_error" => Self::Overloaded,
-            other => Self::Other(other.to_owned()),
-        }
-    }
-
-    /// The kind for a status whose body had no error type.
-    fn from_status(status: u16) -> Self {
-        match status {
-            400 => Self::InvalidRequest,
-            401 => Self::Authentication,
-            402 => Self::Billing,
-            403 => Self::Permission,
-            404 => Self::NotFound,
-            413 => Self::RequestTooLarge,
-            429 => Self::RateLimit,
-            504 => Self::Timeout,
-            529 => Self::Overloaded,
-            _ => Self::Api,
-        }
-    }
+/// The text of a reply that was stopped or failed, as an assistant message.
+pub fn interrupted_items(text: &str) -> Vec<Value> {
+    vec![json!({ "role": "assistant", "content": [{ "type": "text", "text": text }] })]
 }
 
-/// A failed request or stream.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ApiError {
-    /// An error the API returned, as a response or as an `error` event mid-stream.
-    Api {
-        /// The HTTP status, or `None` for an error event in a stream.
-        status: Option<u16>,
-        kind: ErrorKind,
-        /// The API's message, with any copy of the key removed.
-        message: String,
-        /// Seconds from the `retry-after` header.
-        retry_after: Option<u64>,
-    },
-    /// The API could not be reached, or the connection dropped.
-    Transport,
-    /// The stream did not follow the documented format.
-    Protocol,
+/// The results of a round's tool calls, all in one user message.
+pub fn tool_result_items(results: &[(ToolCall, String, bool)]) -> Vec<Value> {
+    let content: Vec<Value> = results
+        .iter()
+        .map(|(call, text, is_error)| {
+            let mut result =
+                json!({ "type": "tool_result", "tool_use_id": call.id, "content": text });
+            if *is_error {
+                result["is_error"] = Value::Bool(true);
+            }
+            result
+        })
+        .collect();
+    vec![json!({ "role": "user", "content": content })]
 }
 
-impl ApiError {
-    fn transport() -> Self {
-        Self::Transport
+/// The history as the API takes it. A reply that ended before the model wrote
+/// anything, or after tool results, leaves two user messages in a row; they are
+/// merged, results first, as the API requires.
+pub fn prepare_history(items: Vec<Value>) -> Vec<Value> {
+    let mut messages: Vec<Value> = Vec::new();
+    for message in items {
+        push_merged(&mut messages, message);
     }
+    messages
+}
 
-    fn protocol() -> Self {
-        Self::Protocol
-    }
-
-    /// The error for a response with a non-success `status` and `body`.
-    pub fn from_response(status: u16, body: &str, retry_after: Option<u64>, key: &ApiKey) -> Self {
-        let parsed = serde_json::from_str::<Value>(body).ok();
-        let error = parsed.as_ref().and_then(|body| body.get("error"));
-        let kind = error
-            .and_then(|error| error.get("type"))
-            .and_then(Value::as_str)
-            .map_or_else(|| ErrorKind::from_status(status), ErrorKind::from_type);
-        let message = error
-            .and_then(|error| error.get("message"))
-            .and_then(Value::as_str)
-            .unwrap_or_default();
-        Self::Api {
-            status: Some(status),
-            kind,
-            message: key.scrub(&truncate(message, 500)),
-            retry_after,
-        }
-    }
-
-    /// The error for an `error` event in a stream.
-    pub fn from_event(data: &Value, key: &ApiKey) -> Self {
-        let error = data.get("error");
-        let kind = error
-            .and_then(|error| error.get("type"))
-            .and_then(Value::as_str)
-            .map_or(ErrorKind::Api, ErrorKind::from_type);
-        let message = error
-            .and_then(|error| error.get("message"))
-            .and_then(Value::as_str)
-            .unwrap_or_default();
-        Self::Api {
-            status: None,
-            kind,
-            message: key.scrub(&truncate(message, 500)),
-            retry_after: None,
-        }
-    }
-
-    /// A sentence for the visitor about what went wrong and what to do.
-    pub fn explain(&self, model: Model) -> String {
-        let Self::Api {
-            kind,
-            message,
-            retry_after,
-            status,
-        } = self
-        else {
-            return match self {
-                Self::Transport => {
-                    "Could not reach the Claude API, or the connection dropped. Try again."
-                        .to_owned()
-                }
-                _ => "The response stream was malformed. Try again.".to_owned(),
-            };
-        };
-        let mut text = match kind {
-            ErrorKind::Authentication => {
-                "The API key was rejected: it may be mistyped, revoked or expired. Clear it \
-                 and enter another."
-                    .to_owned()
-            }
-            ErrorKind::Billing => "Your Anthropic account has a billing problem, such as no \
-                 credit left. Check billing in the Claude Console."
-                .to_owned(),
-            ErrorKind::Permission => format!(
-                "This key is not allowed to use {}. Check the key's workspace in the Claude \
-                 Console.",
-                model.label()
-            ),
-            ErrorKind::NotFound => format!(
-                "{} is not available to your organization. Pick another model.",
-                model.label()
-            ),
-            ErrorKind::RateLimit => match retry_after {
-                Some(seconds) => {
-                    format!("Your account hit a rate limit. Try again in {seconds} seconds.")
-                }
-                // A spend-cap 429 has no retry-after and keeps failing.
-                None => "Your account hit a rate limit or its monthly spend cap.".to_owned(),
-            },
-            ErrorKind::Overloaded => "The Claude API is overloaded right now. Try again in a \
-                 moment, or pick another model."
-                .to_owned(),
-            ErrorKind::Api => "The Claude API had an internal error. Try again.".to_owned(),
-            ErrorKind::Timeout => "The request timed out. Try again.".to_owned(),
-            ErrorKind::RequestTooLarge => {
-                "The conversation is too large to send. Clear it and start again.".to_owned()
-            }
-            ErrorKind::InvalidRequest => "The API rejected the request.".to_owned(),
-            ErrorKind::Other(kind) => format!("The API returned an error ({kind})."),
-        };
-        let code = match (status, kind) {
-            (Some(status), _) => format!(" ({status})"),
-            (None, _) => " (mid-stream)".to_owned(),
-        };
-        text.push_str(&code);
-        if !message.is_empty() {
-            text.push_str(": ");
-            text.push_str(message);
-        }
-        text
-    }
-
-    /// Whether the key itself is the problem, so the visitor should replace it.
-    pub fn is_key_problem(&self) -> bool {
-        matches!(
-            self,
-            Self::Api {
-                kind: ErrorKind::Authentication,
-                ..
-            }
+fn push_merged(messages: &mut Vec<Value>, message: Value) {
+    if let Some(last) = messages.last_mut()
+        && last["role"] == "user"
+        && message["role"] == "user"
+        && let (Some(content), Some(more)) = (
+            last["content"].as_array_mut(),
+            message["content"].as_array(),
         )
+    {
+        content.extend(more.iter().cloned());
+        return;
+    }
+    messages.push(message);
+}
+
+/// The error for an error response, or with no `status`, for the data of an
+/// `error` event in a stream. Both carry `{"error": {"type", "message"}}`.
+pub fn parse_error(
+    status: Option<u16>,
+    body: &str,
+    retry_after: Option<u64>,
+    key: &ApiKey,
+) -> ApiError {
+    let parsed = serde_json::from_str::<Value>(body).ok();
+    let error = parsed.as_ref().and_then(|body| body.get("error"));
+    let kind = error
+        .and_then(|error| error.get("type"))
+        .and_then(Value::as_str)
+        .map_or_else(
+            || status.map_or(ErrorKind::Api, kind_from_status),
+            kind_from_type,
+        );
+    let message = error
+        .and_then(|error| error.get("message"))
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    ApiError::api(status, kind, message, retry_after, key)
+}
+
+/// The kind for a documented `error.type`.
+fn kind_from_type(error_type: &str) -> ErrorKind {
+    match error_type {
+        "invalid_request_error" => ErrorKind::InvalidRequest,
+        "authentication_error" => ErrorKind::Authentication,
+        "billing_error" => ErrorKind::Billing,
+        "permission_error" => ErrorKind::Permission,
+        "not_found_error" => ErrorKind::NotFound,
+        "request_too_large" => ErrorKind::RequestTooLarge,
+        "rate_limit_error" => ErrorKind::RateLimit,
+        "api_error" => ErrorKind::Api,
+        "timeout_error" => ErrorKind::Timeout,
+        "overloaded_error" => ErrorKind::Overloaded,
+        other => ErrorKind::Other(other.to_owned()),
     }
 }
 
-impl fmt::Display for ApiError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.explain(Model::default()))
+/// The kind for a status whose body had no error type.
+fn kind_from_status(status: u16) -> ErrorKind {
+    match status {
+        400 => ErrorKind::InvalidRequest,
+        401 => ErrorKind::Authentication,
+        402 => ErrorKind::Billing,
+        403 => ErrorKind::Permission,
+        404 => ErrorKind::NotFound,
+        413 => ErrorKind::RequestTooLarge,
+        429 => ErrorKind::RateLimit,
+        504 => ErrorKind::Timeout,
+        529 => ErrorKind::Overloaded,
+        _ => ErrorKind::Api,
     }
-}
-
-fn truncate(text: &str, max: usize) -> String {
-    match text.char_indices().nth(max) {
-        Some((end, _)) => format!("{}…", &text[..end]),
-        None => text.to_owned(),
-    }
-}
-
-/// What a stream event changed, for the page to show.
-#[derive(Debug, PartialEq)]
-pub enum Update {
-    ThinkingStarted {
-        index: usize,
-    },
-    Thinking {
-        index: usize,
-        text: String,
-    },
-    TextStarted {
-        index: usize,
-    },
-    Text {
-        index: usize,
-        text: String,
-    },
-    ToolStarted {
-        index: usize,
-        id: String,
-        name: String,
-    },
-    ToolInput {
-        index: usize,
-        partial: String,
-    },
-    BlockStopped {
-        index: usize,
-    },
 }
 
 /// One assistant message, built from the events of a stream.
@@ -470,20 +167,20 @@ pub enum Update {
 pub struct Accumulator {
     /// The content blocks as the API sent them, so they go back unchanged; thinking
     /// blocks in particular must be returned exactly.
-    pub content: Vec<Value>,
+    content: Vec<Value>,
     /// The raw input of each tool-use block, by index, until the block stops.
     inputs: HashMap<usize, String>,
     /// Tool-use inputs that were not valid JSON, by index: the raw text.
-    pub invalid_inputs: HashMap<usize, String>,
-    pub stop_reason: Option<String>,
+    invalid_inputs: HashMap<usize, String>,
+    stop_reason: Option<String>,
     /// `message_stop` arrived.
-    pub finished: bool,
+    stopped: bool,
 }
 
 impl Accumulator {
     /// Applies one event. An `error` event becomes an [`ApiError`].
     pub fn apply(&mut self, event: &sse::Event, key: &ApiKey) -> Result<Option<Update>, ApiError> {
-        let data: Value = serde_json::from_str(&event.data).map_err(|_| ApiError::protocol())?;
+        let data: Value = serde_json::from_str(&event.data).map_err(|_| ApiError::Protocol)?;
         let kind = data
             .get("type")
             .and_then(Value::as_str)
@@ -494,14 +191,14 @@ impl Accumulator {
             .and_then(|index| usize::try_from(index).ok());
         Ok(match kind {
             "content_block_start" => {
-                let index = index.ok_or_else(ApiError::protocol)?;
+                let index = index.ok_or(ApiError::Protocol)?;
                 let block = data
                     .get("content_block")
                     .cloned()
-                    .ok_or_else(ApiError::protocol)?;
+                    .ok_or(ApiError::Protocol)?;
                 // Indexes count up from 0; a gap would mean a lost event.
                 if index != self.content.len() {
-                    return Err(ApiError::protocol());
+                    return Err(ApiError::Protocol);
                 }
                 let update = match block.get("type").and_then(Value::as_str) {
                     Some("thinking") => Some(Update::ThinkingStarted { index }),
@@ -521,9 +218,9 @@ impl Accumulator {
                 update
             }
             "content_block_delta" => {
-                let index = index.ok_or_else(ApiError::protocol)?;
-                let delta = data.get("delta").ok_or_else(ApiError::protocol)?;
-                let block = self.content.get_mut(index).ok_or_else(ApiError::protocol)?;
+                let index = index.ok_or(ApiError::Protocol)?;
+                let delta = data.get("delta").ok_or(ApiError::Protocol)?;
+                let block = self.content.get_mut(index).ok_or(ApiError::Protocol)?;
                 match delta.get("type").and_then(Value::as_str) {
                     Some("text_delta") => {
                         let text = string_field(delta, "text");
@@ -551,22 +248,28 @@ impl Accumulator {
                 }
             }
             "content_block_stop" => {
-                let index = index.ok_or_else(ApiError::protocol)?;
+                let index = index.ok_or(ApiError::Protocol)?;
+                let mut tool_input = None;
                 if let Some(raw) = self.inputs.remove(&index) {
                     // The final input is always an object; an empty one streams no
                     // fragments at all.
                     let raw_or_empty = if raw.trim().is_empty() { "{}" } else { &raw };
                     let input = match serde_json::from_str::<Value>(raw_or_empty) {
-                        Ok(input @ Value::Object(_)) => input,
+                        Ok(input @ Value::Object(_)) => {
+                            tool_input =
+                                Some(serde_json::to_string_pretty(&input).unwrap_or_default());
+                            input
+                        }
                         _ => {
+                            tool_input = Some(raw.clone());
                             self.invalid_inputs.insert(index, raw);
                             json!({})
                         }
                     };
-                    let block = self.content.get_mut(index).ok_or_else(ApiError::protocol)?;
+                    let block = self.content.get_mut(index).ok_or(ApiError::Protocol)?;
                     block["input"] = input;
                 }
-                Some(Update::BlockStopped { index })
+                Some(Update::BlockStopped { index, tool_input })
             }
             "message_delta" => {
                 if let Some(reason) = data
@@ -579,18 +282,51 @@ impl Accumulator {
                 None
             }
             "message_stop" => {
-                self.finished = true;
+                self.stopped = true;
                 None
             }
-            "error" => return Err(ApiError::from_event(&data, key)),
+            "error" => return Err(parse_error(None, &event.data, None, key)),
             // message_start, ping, and event types added later.
             _ => None,
         })
     }
 
+    /// The finished message, once `message_stop` has arrived.
+    pub fn finished(&self) -> Option<Finished> {
+        if !self.stopped {
+            return None;
+        }
+        let outcome = match self.stop_reason.as_deref() {
+            Some("tool_use") => Outcome::ToolUse,
+            Some("max_tokens") => Outcome::MaxTokens,
+            Some("refusal") => Outcome::Refusal,
+            // end_turn, stop_sequence, and reasons added later.
+            _ => Outcome::Done,
+        };
+        let calls = self
+            .content
+            .iter()
+            .enumerate()
+            .filter(|(_, block)| block["type"] == "tool_use")
+            .map(|(index, block)| ToolCall {
+                id: string_field(block, "id"),
+                name: string_field(block, "name"),
+                input: match self.invalid_inputs.get(&index) {
+                    Some(raw) => Err(raw.clone()),
+                    None => Ok(block["input"].clone()),
+                },
+            })
+            .collect();
+        Some(Finished {
+            outcome,
+            calls,
+            items: vec![self.assistant_message()],
+        })
+    }
+
     /// The message to send back as the assistant's turn. Empty text blocks are left
     /// out, since the API rejects them; every other block goes back as it came.
-    pub fn assistant_message(&self) -> Value {
+    fn assistant_message(&self) -> Value {
         let content: Vec<&Value> = self
             .content
             .iter()
@@ -628,9 +364,14 @@ fn append(block: &mut Value, field: &str, text: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::live::provider::Provider;
 
     fn key() -> ApiKey {
-        ApiKey::parse("sk-ant-api03-test-key-0123456789abcdef").unwrap()
+        ApiKey::parse(
+            Provider::Anthropic,
+            "sk-ant-api03-test-key-0123456789abcdef",
+        )
+        .unwrap()
     }
 
     /// Feeds a stream through the parser and the accumulator.
@@ -677,7 +418,7 @@ mod tests {
              event: message_stop\n\
              data: {\"type\": \"message_stop\"}\n\n");
         assert_eq!(error, None);
-        assert!(message.finished);
+        assert!(message.stopped);
         assert_eq!(message.stop_reason.as_deref(), Some("end_turn"));
         assert_eq!(
             message.assistant_message(),
@@ -731,6 +472,17 @@ mod tests {
             })
         );
         assert!(message.invalid_inputs.is_empty());
+        let finished = message.finished().unwrap();
+        assert_eq!(finished.outcome, Outcome::ToolUse);
+        assert_eq!(
+            finished.calls,
+            [ToolCall {
+                id: "toolu_01T1x1fJ34qAmk2tNTrN7Up6".to_owned(),
+                name: "get_weather".to_owned(),
+                input: Ok(json!({ "location": "San Francisco, CA" })),
+            }]
+        );
+        assert_eq!(finished.items, [message.assistant_message()]);
         assert!(updates.contains(&Update::ToolStarted {
             index: 1,
             id: "toolu_01T1x1fJ34qAmk2tNTrN7Up6".to_owned(),
@@ -740,7 +492,7 @@ mod tests {
 
     #[test]
     fn keeps_invalid_tool_input_aside() {
-        let (message, _, error) = run(
+        let (message, updates, error) = run(
             "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"t\",\"name\":\"calculate\",\"input\":{}}}\n\n\
              data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"expression\\\": \\\"1+\"}}\n\n\
              data: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
@@ -748,6 +500,34 @@ mod tests {
         assert_eq!(error, None);
         assert_eq!(message.content[0]["input"], json!({}));
         assert_eq!(message.invalid_inputs[&0], "{\"expression\": \"1+");
+        assert_eq!(
+            updates.last(),
+            Some(&Update::BlockStopped {
+                index: 0,
+                tool_input: Some("{\"expression\": \"1+".to_owned())
+            })
+        );
+        // No message_stop, so the message is not finished.
+        assert!(message.finished().is_none());
+    }
+
+    #[test]
+    fn tool_input_arrives_with_block_stop() {
+        let (_, updates, error) = run(
+            "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"t\",\"name\":\"calculate\",\"input\":{}}}\n\n\
+             data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"expression\\\":\"}}\n\n\
+             data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\" \\\"2+2\\\"}\"}}\n\n\
+             data: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
+        );
+        assert_eq!(error, None);
+        let pretty = serde_json::to_string_pretty(&json!({"expression": "2+2"})).unwrap();
+        assert_eq!(
+            updates.last(),
+            Some(&Update::BlockStopped {
+                index: 0,
+                tool_input: Some(pretty)
+            })
+        );
     }
 
     #[test]
@@ -783,7 +563,13 @@ mod tests {
             message.content,
             [json!({"type": "redacted_thinking", "data": "abc"})]
         );
-        assert_eq!(updates, [Update::BlockStopped { index: 0 }]);
+        assert_eq!(
+            updates,
+            [Update::BlockStopped {
+                index: 0,
+                tool_input: None
+            }]
+        );
     }
 
     #[test]
@@ -805,7 +591,7 @@ mod tests {
             let body = format!(
                 "{{\"type\":\"error\",\"error\":{{\"type\":\"{error_type}\",\"message\":\"m\"}},\"request_id\":\"req_1\"}}"
             );
-            let error = ApiError::from_response(status, &body, None, &key);
+            let error = parse_error(Some(status), &body, None, &key);
             assert_eq!(
                 error,
                 ApiError::Api {
@@ -817,7 +603,7 @@ mod tests {
             );
             // A body that is not JSON (such as a proxy's page) falls back to the status.
             let ApiError::Api { kind: fallback, .. } =
-                ApiError::from_response(status, "<html>", None, &key)
+                parse_error(Some(status), "<html>", None, &key)
             else {
                 panic!("an API error");
             };
@@ -825,7 +611,7 @@ mod tests {
                 assert_eq!(fallback, kind, "{status}");
             }
         }
-        let error = ApiError::from_response(429, "{}", Some(30), &key);
+        let error = parse_error(Some(429), "{}", Some(30), &key);
         assert!(error.explain(Model::Sonnet).contains("30 seconds"));
         assert!(error.explain(Model::Sonnet).contains("(429)"));
     }
@@ -837,12 +623,10 @@ mod tests {
             "{{\"type\":\"error\",\"error\":{{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key {}\"}}}}",
             key.expose()
         );
-        let error = ApiError::from_response(401, &body, None, &key);
-        for printed in [
-            error.explain(Model::Opus),
-            format!("{error}"),
-            format!("{error:?}"),
-        ] {
+        let error = parse_error(Some(401), &body, None, &key);
+        // Every model's notice, and the debug form.
+        let notices = Model::ALL.map(|model| error.explain(model));
+        for printed in notices.into_iter().chain([format!("{error:?}")]) {
             assert!(!printed.contains(key.expose()), "{printed}");
         }
         assert!(error.is_key_problem());
@@ -868,19 +652,13 @@ mod tests {
     }
 
     #[test]
-    fn only_listed_models_are_accepted() {
-        assert_eq!(Model::from_id("claude-sonnet-5-5"), Some(Model::Sonnet));
-        assert_eq!(Model::from_id("claude-opus-5-5"), Some(Model::Opus));
-        assert_eq!(Model::from_id("claude-haiku-5-5"), Some(Model::Haiku));
-        assert_eq!(Model::from_id("claude-fable-5-2"), None);
-        assert_eq!(Model::from_id(""), None);
-        assert_eq!(Model::default(), Model::Sonnet);
-    }
-
-    #[test]
-    fn the_production_endpoint_is_https() {
-        assert!(PRODUCTION_URL.starts_with("https://api.anthropic.com"));
-        assert!(Endpoint::production().is_production());
-        assert!(!Endpoint::local("http://127.0.0.1:1").is_production());
+    fn history_merges_consecutive_user_messages() {
+        let mut items = user_items("first");
+        items.extend(interrupted_items("partial"));
+        items.extend(user_items("second"));
+        items.extend(user_items("third"));
+        let history = prepare_history(items);
+        assert_eq!(history.len(), 3);
+        assert_eq!(history[2]["content"].as_array().unwrap().len(), 2);
     }
 }

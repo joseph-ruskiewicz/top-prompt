@@ -11,13 +11,14 @@ use std::{
     time::{Duration, Instant},
 };
 
-use serde_json::{Value, json};
+use serde_json::Value;
 use tokio::{sync::broadcast, task::AbortHandle, time::sleep};
 use topcoat::session::TokenHash;
 
 use super::{
-    api::{self, Accumulator, ApiError, Model, Update},
+    api::{self, ApiError, Update},
     key::{ApiKey, KeyError},
+    provider::{Finished, Model, Outcome, Provider, ToolCall},
     tools,
 };
 use crate::components::{prompt_input::PromptStatus, tool_call::ToolStatus};
@@ -52,10 +53,10 @@ struct DemoInner {
 }
 
 impl Demo {
-    pub fn new(endpoint: api::Endpoint) -> Self {
+    pub fn new(endpoints: api::Endpoints) -> Self {
         Self {
             inner: Arc::new(DemoInner {
-                client: api::Client::new(endpoint),
+                client: api::Client::new(endpoints),
                 visitors: Mutex::default(),
                 ips: Mutex::default(),
                 sweeper: Once::new(),
@@ -219,6 +220,8 @@ pub struct Visitor {
 struct State {
     /// Held in memory only. Never cloned out except into the generation task.
     key: Option<Arc<ApiKey>>,
+    /// Whose API the key is for. The model always belongs to it.
+    provider: Provider,
     model: Model,
     turns: Vec<Turn>,
     next_id: u64,
@@ -244,11 +247,11 @@ struct Turn {
     current: usize,
 }
 
-/// One reply: what the page shows, and the messages it adds to the API history.
+/// One reply: what the page shows, and the items it adds to the API history.
 struct Reply {
     view: ReplyView,
-    /// Assistant messages and tool-result user messages, in order. Append-only, so
-    /// thinking blocks go back to the API exactly as they came.
+    /// The model's output and the tool results, as the provider's history items, in
+    /// order. Append-only, so thinking goes back to the API exactly as it came.
     api: Vec<Value>,
     /// The first part of the API request being streamed, so a stop knows which
     /// parts are not in `api` yet.
@@ -259,6 +262,7 @@ struct Reply {
 #[derive(Clone, Default)]
 pub struct Snapshot {
     pub has_key: bool,
+    pub provider: Provider,
     pub model: Model,
     pub turns: Vec<TurnView>,
     pub status: PromptStatus,
@@ -359,7 +363,8 @@ impl Visitor {
         Self {
             state: Mutex::new(State {
                 key: None,
-                model: Model::default(),
+                provider: Provider::default(),
+                model: Provider::default().default_model(),
                 turns: Vec::new(),
                 next_id: 0,
                 generation: None,
@@ -398,6 +403,7 @@ impl Visitor {
         };
         Snapshot {
             has_key: state.key.is_some(),
+            provider: state.provider,
             model: state.model,
             turns: state
                 .turns
@@ -418,10 +424,11 @@ impl Visitor {
         }
     }
 
-    /// Stores a key the visitor entered. `Err` is a message for the page.
+    /// Stores a key the visitor entered, checked against the current provider. `Err`
+    /// is a message for the page.
     pub fn set_key(&self, raw: &str) -> Result<(), &'static str> {
-        let key = ApiKey::parse(raw).map_err(KeyError::message)?;
         let mut state = self.state.lock().unwrap();
+        let key = ApiKey::parse(state.provider, raw).map_err(KeyError::message)?;
         state.key = Some(Arc::new(key));
         state.last_seen = Instant::now();
         drop(state);
@@ -442,9 +449,31 @@ impl Visitor {
         self.notify();
     }
 
+    /// Switches provider. The key and the conversation belong to the old one, so
+    /// they go, and any reply being generated stops. Returns whether it changed.
+    pub fn set_provider(&self, provider: Provider) -> bool {
+        let mut state = self.state.lock().unwrap();
+        if state.provider == provider {
+            return false;
+        }
+        // Taking the generation makes any late update from its task a no-op.
+        if let Some(generation) = state.generation.take() {
+            generation.handle.abort();
+        }
+        state.provider = provider;
+        state.model = provider.default_model();
+        state.key = None;
+        state.turns.clear();
+        drop(state);
+        self.notify();
+        true
+    }
+
+    /// Picks the model for the next replies. Only the current provider's models,
+    /// and not while a reply is being generated.
     pub fn set_model(&self, model: Model) -> bool {
         let mut state = self.state.lock().unwrap();
-        if state.generation.is_some() {
+        if state.generation.is_some() || model.provider() != state.provider {
             return false;
         }
         state.model = model;
@@ -477,7 +506,7 @@ impl Visitor {
             replies: vec![Reply::new(model)],
             current: 0,
         });
-        let messages = history(&state.turns);
+        let messages = history(state.provider, &state.turns);
         state.start(self, demo, key, model, ip, messages);
         drop(state);
         self.notify();
@@ -499,7 +528,7 @@ impl Visitor {
         };
         turn.replies.push(Reply::new(model));
         turn.current = turn.replies.len() - 1;
-        let messages = history(&state.turns);
+        let messages = history(state.provider, &state.turns);
         state.start(self, demo, key, model, ip, messages);
         drop(state);
         self.notify();
@@ -530,8 +559,9 @@ impl Visitor {
             return;
         };
         generation.handle.abort();
+        let provider = state.provider;
         if let Some(reply) = state.current_reply() {
-            reply.interrupt(ReplyState::Stopped, None);
+            reply.interrupt(provider, ReplyState::Stopped, None);
         }
         drop(state);
         self.notify();
@@ -550,7 +580,8 @@ impl Visitor {
 
     #[cfg(test)]
     pub(super) fn api_history(&self) -> Vec<Value> {
-        history(&self.state.lock().unwrap().turns)
+        let state = self.state.lock().unwrap();
+        history(state.provider, &state.turns)
     }
 
     #[cfg(test)]
@@ -576,6 +607,7 @@ impl State {
         let job = Job {
             visitor: visitor.clone(),
             id,
+            provider: self.provider,
         };
         let demo = demo.clone();
         // The caller holds the state lock until the handle is stored, so the task's
@@ -608,9 +640,9 @@ impl Reply {
     }
 
     /// Ends the reply early. The parts of the request in flight are not complete
-    /// messages, so their text alone goes into the history, as an assistant message;
+    /// output, so their text alone goes into the history, as the assistant's;
     /// unfinished thinking and tool calls are dropped from it and shown as cancelled.
-    fn interrupt(&mut self, state: ReplyState, notice: Option<Notice>) {
+    fn interrupt(&mut self, provider: Provider, state: ReplyState, notice: Option<Notice>) {
         let text: Vec<&str> = self.view.parts[self.round_start..]
             .iter()
             .filter_map(|part| match part {
@@ -619,10 +651,8 @@ impl Reply {
             })
             .collect();
         if !text.is_empty() {
-            self.api.push(json!({
-                "role": "assistant",
-                "content": [{ "type": "text", "text": text.join("\n\n") }],
-            }));
+            self.api
+                .extend(provider.interrupted_items(&text.join("\n\n")));
         }
         for part in &mut self.view.parts[self.round_start..] {
             match part {
@@ -658,6 +688,9 @@ impl Reply {
 struct Job {
     visitor: Arc<Visitor>,
     id: u64,
+    /// The visitor's provider when the task started. Switching provider stops the
+    /// task, so it never speaks another protocol midway.
+    provider: Provider,
 }
 
 impl Job {
@@ -703,40 +736,17 @@ fn elapsed_secs(started: Instant) -> u32 {
     (started.elapsed().as_secs_f32().round() as u32).max(1)
 }
 
-/// The API messages for the conversation: each turn's user message, then the shown
-/// reply's messages, except for the last turn, which is the one being answered.
-///
-/// A reply that ended before the model wrote anything, or after tool results, leaves
-/// two user messages in a row; they are merged, results first, as the API requires.
-fn history(turns: &[Turn]) -> Vec<Value> {
-    let mut messages: Vec<Value> = Vec::new();
+/// The API history for the conversation: each turn's user message, then the shown
+/// reply's items, except for the last turn, which is the one being answered.
+fn history(provider: Provider, turns: &[Turn]) -> Vec<Value> {
+    let mut items: Vec<Value> = Vec::new();
     for (index, turn) in turns.iter().enumerate() {
-        push_merged(
-            &mut messages,
-            json!({ "role": "user", "content": [{ "type": "text", "text": turn.user }] }),
-        );
+        items.extend(provider.user_items(&turn.user));
         if index + 1 < turns.len() {
-            for message in &turn.replies[turn.current].api {
-                push_merged(&mut messages, message.clone());
-            }
+            items.extend(turn.replies[turn.current].api.iter().cloned());
         }
     }
-    messages
-}
-
-fn push_merged(messages: &mut Vec<Value>, message: Value) {
-    if let Some(last) = messages.last_mut()
-        && last["role"] == "user"
-        && message["role"] == "user"
-        && let (Some(content), Some(more)) = (
-            last["content"].as_array_mut(),
-            message["content"].as_array(),
-        )
-    {
-        content.extend(more.iter().cloned());
-        return;
-    }
-    messages.push(message);
+    provider.prepare_history(items)
 }
 
 /// Streams one reply, running tools until the model answers.
@@ -748,6 +758,7 @@ async fn generate(
     ip: Option<IpAddr>,
     mut messages: Vec<Value>,
 ) {
+    let provider = job.provider;
     for round in 0.. {
         if round == MAX_TOOL_ROUNDS {
             job.finish(|reply| {
@@ -760,56 +771,55 @@ async fn generate(
         }
         if let Err(limit) = demo.take_request(&job.visitor, ip) {
             job.finish(|reply| {
-                reply.interrupt(ReplyState::Failed, Some(Notice::warning(limit)));
+                reply.interrupt(provider, ReplyState::Failed, Some(Notice::warning(limit)));
             });
             return;
         }
         job.update(|reply| reply.round_start = reply.view.parts.len());
 
-        let message = match stream_message(demo, job, key, model, &messages).await {
-            Ok(message) => message,
+        let finished = match stream_message(demo, job, key, model, &messages).await {
+            Ok(finished) => finished,
             Err(error) => {
                 let notice = Notice {
                     text: error.explain(model),
                     error: true,
                     key_problem: error.is_key_problem(),
                 };
-                job.finish(|reply| reply.interrupt(ReplyState::Failed, Some(notice)));
+                job.finish(|reply| reply.interrupt(provider, ReplyState::Failed, Some(notice)));
                 return;
             }
         };
 
-        match message.stop_reason.as_deref() {
-            Some("tool_use") => {
-                let results = run_tools(job, &message).await;
-                let assistant = message.assistant_message();
-                let results = json!({ "role": "user", "content": results });
+        match finished.outcome {
+            Outcome::ToolUse => {
+                let results = run_tools(job, &finished.calls).await;
+                let mut items = finished.items;
+                items.extend(provider.tool_result_items(&results));
                 job.update(|reply| {
-                    reply.api.push(assistant.clone());
-                    reply.api.push(results.clone());
+                    reply.api.extend(items.iter().cloned());
                     reply.round_start = reply.view.parts.len();
                 });
-                messages.push(assistant);
-                messages.push(results);
+                messages.extend(items);
             }
-            Some("max_tokens") => {
+            Outcome::MaxTokens => {
                 let notice = Notice::warning(format!(
                     "The reply reached the demo's cap of {} tokens.",
                     api::MAX_TOKENS
                 ));
-                job.finish(|reply| reply.interrupt(ReplyState::Done, Some(notice)));
+                job.finish(|reply| reply.interrupt(provider, ReplyState::Done, Some(notice)));
                 return;
             }
-            Some("refusal") => {
-                let notice = Notice::warning("Claude declined to continue with this request.");
-                job.finish(|reply| reply.interrupt(ReplyState::Done, Some(notice)));
+            Outcome::Refusal => {
+                let notice = Notice::warning(format!(
+                    "{} declined to continue with this request.",
+                    model.label()
+                ));
+                job.finish(|reply| reply.interrupt(provider, ReplyState::Done, Some(notice)));
                 return;
             }
-            // end_turn, stop_sequence, and reasons added later.
-            _ => {
-                let assistant = message.assistant_message();
+            Outcome::Done => {
                 job.finish(|reply| {
-                    reply.api.push(assistant);
+                    reply.api.extend(finished.items);
                     reply.round_start = reply.view.parts.len();
                     reply.view.state = ReplyState::Done;
                 });
@@ -826,55 +836,30 @@ async fn stream_message(
     key: &ApiKey,
     model: Model,
     messages: &[Value],
-) -> Result<Accumulator, ApiError> {
-    let body = api::request_body(model, messages);
-    let mut stream = demo.inner.client.stream(key, &body).await?;
-    let mut message = Accumulator::default();
-    // Content block index to part index, for this request.
+) -> Result<Finished, ApiError> {
+    let provider = job.provider;
+    let body = provider.request_body(model, messages);
+    let mut stream = demo.inner.client.stream(provider, key, &body).await?;
+    let mut state = provider.stream_state();
+    // Update index to part index, for this request.
     let mut parts: HashMap<usize, usize> = HashMap::new();
     while let Some(events) = stream.next().await? {
         let mut updates = Vec::new();
         for event in &events {
-            if let Some(update) = message.apply(event, key)? {
-                updates.push(update);
-            }
+            updates.extend(state.apply(event, key)?);
         }
         if !updates.is_empty() {
-            // Tool inputs are pretty-printed once complete.
-            let inputs: HashMap<usize, String> = updates
-                .iter()
-                .filter_map(|update| match update {
-                    Update::BlockStopped { index } => message
-                        .content
-                        .get(*index)
-                        .filter(|block| block["type"] == "tool_use")
-                        .map(|block| {
-                            let input = match message.invalid_inputs.get(index) {
-                                Some(raw) => raw.clone(),
-                                None => serde_json::to_string_pretty(&block["input"])
-                                    .unwrap_or_default(),
-                            };
-                            (*index, input)
-                        }),
-                    _ => None,
-                })
-                .collect();
-            job.update(|reply| apply_updates(reply, &mut parts, updates, inputs));
+            job.update(|reply| apply_updates(reply, &mut parts, updates));
         }
-        if message.finished {
-            return Ok(message);
+        if let Some(finished) = state.finished() {
+            return Ok(finished);
         }
     }
-    // The stream ended without message_stop.
+    // The stream ended without the provider's terminal event.
     Err(ApiError::Transport)
 }
 
-fn apply_updates(
-    reply: &mut Reply,
-    parts: &mut HashMap<usize, usize>,
-    updates: Vec<Update>,
-    mut inputs: HashMap<usize, String>,
-) {
+fn apply_updates(reply: &mut Reply, parts: &mut HashMap<usize, usize>, updates: Vec<Update>) {
     reply.view.state = ReplyState::Streaming;
     for update in updates {
         match update {
@@ -917,7 +902,7 @@ fn apply_updates(
                     }
                 }
             }
-            Update::BlockStopped { index } => {
+            Update::BlockStopped { index, tool_input } => {
                 if let Some(part) = parts
                     .get(&index)
                     .and_then(|at| reply.view.parts.get_mut(*at))
@@ -933,8 +918,8 @@ fn apply_updates(
                             *secs = Some(elapsed_secs(*started));
                         }
                         Part::Tool { input, .. } => {
-                            if let Some(pretty) = inputs.remove(&index) {
-                                *input = pretty;
+                            if let Some(complete) = tool_input {
+                                *input = complete;
                             }
                         }
                         Part::Text(_) => {}
@@ -945,24 +930,9 @@ fn apply_updates(
     }
 }
 
-/// Runs the tool calls of `message` and returns their `tool_result` blocks, all of
-/// which go in one user message.
-async fn run_tools(job: &Job, message: &Accumulator) -> Vec<Value> {
-    let calls: Vec<(usize, String, String, Value)> = message
-        .content
-        .iter()
-        .enumerate()
-        .filter(|(_, block)| block["type"] == "tool_use")
-        .map(|(index, block)| {
-            (
-                index,
-                block["id"].as_str().unwrap_or_default().to_owned(),
-                block["name"].as_str().unwrap_or_default().to_owned(),
-                block["input"].clone(),
-            )
-        })
-        .collect();
-
+/// Runs a round's tool calls and returns each with its output text and whether it
+/// is an error.
+async fn run_tools(job: &Job, calls: &[ToolCall]) -> Vec<(ToolCall, String, bool)> {
     job.update(|reply| {
         for part in &mut reply.view.parts[reply.round_start..] {
             if let Part::Tool { status, .. } = part {
@@ -974,33 +944,28 @@ async fn run_tools(job: &Job, message: &Accumulator) -> Vec<Value> {
     // running state before the result.
     sleep(Duration::from_millis(300)).await;
 
-    let mut results = Vec::new();
-    let mut outputs = Vec::new();
-    for (index, id, name, input) in calls {
-        let outcome = match message.invalid_inputs.get(&index) {
-            Some(raw) => Err(format!(
-                "INVALID_JSON: the input was not valid JSON, so the tool did not run. \
-                 Received: {raw}"
-            )),
-            None => tools::run(&name, &input),
-        };
-        let (text, is_error) = match outcome {
-            Ok(text) => (text, false),
-            Err(text) => (text, true),
-        };
-        let mut result = json!({ "type": "tool_result", "tool_use_id": id, "content": text });
-        if is_error {
-            result["is_error"] = Value::Bool(true);
-        }
-        results.push(result);
-        outputs.push((text, is_error));
-    }
+    let results: Vec<(ToolCall, String, bool)> = calls
+        .iter()
+        .map(|call| {
+            let outcome = match &call.input {
+                Err(raw) => Err(format!(
+                    "INVALID_JSON: the input was not valid JSON, so the tool did not run. \
+                     Received: {raw}"
+                )),
+                Ok(input) => tools::run(&call.name, input),
+            };
+            match outcome {
+                Ok(text) => (call.clone(), text, false),
+                Err(text) => (call.clone(), text, true),
+            }
+        })
+        .collect();
 
     job.update(|reply| {
         let tools = reply.view.parts[reply.round_start..]
             .iter_mut()
             .filter(|part| matches!(part, Part::Tool { .. }));
-        for (part, (text, is_error)) in tools.zip(outputs) {
+        for (part, (_, text, is_error)) in tools.zip(&results) {
             if let Part::Tool {
                 status,
                 output,
@@ -1008,13 +973,13 @@ async fn run_tools(job: &Job, message: &Accumulator) -> Vec<Value> {
                 ..
             } = part
             {
-                *status = if is_error {
+                *status = if *is_error {
                     ToolStatus::Error
                 } else {
                     ToolStatus::Completed
                 };
-                *output = Some(text);
-                *error = is_error;
+                *output = Some(text.clone());
+                *error = *is_error;
             }
         }
     });

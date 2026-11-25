@@ -12,21 +12,27 @@ use topcoat::{
 };
 
 use super::{
-    api::{Endpoint, MAX_TOKENS, Model},
+    anthropic::API_VERSION,
+    api::{Endpoint, Endpoints, MAX_TOKENS},
     chat::{
         Demo, IDLE_TIMEOUT, IP_REQUESTS, MAX_TURNS, Part, ReplyState, ReplyView, Snapshot,
         VISITOR_REQUESTS, Visitor,
     },
     fake::FakeApi,
+    provider::{Model, Provider},
 };
 use crate::components::{prompt_input::PromptStatus, tool_call::ToolStatus};
 
 const KEY_A: &str = "sk-ant-api03-visitor-a-0123456789abcdefghijklmnop";
 const KEY_B: &str = "sk-ant-api03-visitor-b-zyxwvutsrqponmlkjihgfedcba";
+const OPENAI_KEY: &str = "sk-proj-visitor-c-0123456789abcdefghijklmnop";
 
 async fn setup() -> (FakeApi, Demo) {
     let fake = FakeApi::start().await.unwrap();
-    let demo = Demo::new(Endpoint::local(fake.url()));
+    let demo = Demo::new(Endpoints {
+        anthropic: Endpoint::local(fake.url()),
+        openai: Endpoint::local(fake.url()),
+    });
     (fake, demo)
 }
 
@@ -154,7 +160,7 @@ async fn streams_thinking_a_tool_call_and_text() {
     assert_eq!(requests.len(), 2);
     for request in &requests {
         assert_eq!(request.api_key, KEY_A);
-        assert_eq!(request.version, super::api::API_VERSION);
+        assert_eq!(request.version, API_VERSION);
         assert_eq!(request.path, "/v1/messages");
         assert_eq!(request.body["model"], "claude-sonnet-5-5");
         assert_eq!(request.body["max_tokens"], MAX_TOKENS);
@@ -436,6 +442,84 @@ async fn rejects_input_outside_the_limits() {
 }
 
 #[tokio::test]
+async fn switching_provider_clears_key_and_conversation() {
+    let (_fake, demo) = setup().await;
+    let visitor = visitor(&demo, KEY_A);
+    assert!(visitor.send(&demo, "[text] hi", ip(30)));
+    assert_eq!(settle(&visitor).await.turns.len(), 1);
+
+    assert!(visitor.set_provider(Provider::OpenAi));
+    let snapshot = visitor.snapshot();
+    assert!(!snapshot.has_key);
+    assert!(snapshot.turns.is_empty());
+    assert_eq!(snapshot.provider, Provider::OpenAi);
+    assert_eq!(snapshot.model.provider(), Provider::OpenAi);
+    assert_eq!(snapshot.model, Provider::OpenAi.default_model());
+    // Choosing the same provider again changes nothing.
+    assert!(!visitor.set_provider(Provider::OpenAi));
+    // Keys are now checked against OpenAI's shape.
+    assert!(visitor.set_key(KEY_A).is_err());
+}
+
+#[tokio::test]
+async fn a_swapped_key_names_its_provider_and_sends_nothing() {
+    let (fake, demo) = setup().await;
+    for (provider, key, named) in [
+        (Provider::OpenAi, KEY_A, "an Anthropic key"),
+        (Provider::Anthropic, OPENAI_KEY, "an OpenAI key"),
+    ] {
+        let visitor = demo.visitor(&session()).unwrap();
+        visitor.set_provider(provider);
+        let message = visitor.set_key(key).unwrap_err();
+        assert!(message.contains(named), "{message}");
+        assert!(!visitor.snapshot().has_key);
+        assert!(!visitor.send(&demo, "[text] hi", ip(31)));
+    }
+    assert_eq!(fake.requests().len(), 0);
+}
+
+#[tokio::test]
+async fn switching_provider_mid_stream_stops_the_reply() {
+    let (_fake, demo) = setup().await;
+    let visitor = visitor(&demo, KEY_A);
+    assert!(visitor.send(&demo, "[slow] go", ip(31)));
+    wait_for(&visitor, |snapshot| {
+        snapshot.status == PromptStatus::Streaming
+    })
+    .await;
+    assert!(visitor.set_provider(Provider::OpenAi));
+    assert!(!visitor.snapshot().has_key);
+    // No generation is left running: a model change and a new message are both
+    // refused while one is.
+    assert!(visitor.set_model(Model::Luna));
+    visitor.set_key(OPENAI_KEY).unwrap();
+    assert!(visitor.send(&demo, "[text] again", ip(31)));
+    visitor.stop();
+    // The old task makes no late changes, so the new turn holds only its own
+    // stopped, empty reply.
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    let snapshot = visitor.snapshot();
+    assert_eq!(snapshot.status, PromptStatus::Ready);
+    assert_eq!(snapshot.turns.len(), 1);
+    assert_eq!(snapshot.turns[0].user, "[text] again");
+    let reply = last_reply(&snapshot);
+    assert_eq!(reply.state, ReplyState::Stopped);
+    assert_eq!(reply.model, Model::Luna);
+    assert!(reply.parts.is_empty(), "{:?}", reply.parts);
+}
+
+#[tokio::test]
+async fn models_from_the_other_provider_are_rejected() {
+    let (_fake, demo) = setup().await;
+    let visitor = visitor(&demo, KEY_A);
+    let before = visitor.snapshot().model;
+    let openai = Model::for_provider(Provider::OpenAi).next().unwrap();
+    assert!(!visitor.set_model(openai));
+    assert_eq!(visitor.snapshot().model, before);
+    assert_eq!(before.provider(), Provider::Anthropic);
+}
+
+#[tokio::test]
 async fn caps_turns_and_requests() {
     let (fake, demo) = setup().await;
     let visitor = visitor(&demo, KEY_A);
@@ -559,10 +643,21 @@ async fn get(
 }
 
 #[tokio::test]
+async fn old_address_redirects_to_live() {
+    let (_fake, demo) = setup().await;
+    let router = site(&demo);
+    let (response, _) = get(&router, "/full/claude", None).await;
+    assert_eq!(response.status(), 308);
+    assert_eq!(response.headers().get("location").unwrap(), "/full/live");
+    let (response, _) = get(&router, "/full/live", None).await;
+    assert_eq!(response.status(), 200);
+}
+
+#[tokio::test]
 async fn the_first_load_sets_a_strict_session_cookie() {
     let (_fake, demo) = setup().await;
     let router = site(&demo);
-    let (response, body) = get(&router, "/full/claude", None).await;
+    let (response, body) = get(&router, "/full/live", None).await;
     assert_eq!(response.status(), 200);
     let cookie = response
         .headers()
@@ -593,35 +688,85 @@ async fn the_first_load_sets_a_strict_session_cookie() {
 
     // The same cookie finds the same visitor on the next load.
     let token = cookie.split(';').next().unwrap();
-    let (again, _) = get(&router, "/full/claude", Some(token)).await;
+    let (again, _) = get(&router, "/full/live", Some(token)).await;
     assert!(again.headers().get("set-cookie").is_none());
+}
+
+/// A router, a cookie for a session and the visitor behind it.
+fn page_visitor(demo: &Demo) -> (topcoat::router::Router, String, Arc<Visitor>) {
+    let token = Token::random();
+    let cookie = format!("__Host-demo={}", token.encode());
+    let visitor = demo.visitor(&token.hash()).unwrap();
+    (site(demo), cookie, visitor)
+}
+
+#[tokio::test]
+async fn the_key_form_offers_both_providers() {
+    let (_fake, demo) = setup().await;
+    let (router, cookie, visitor) = page_visitor(&demo);
+
+    let (_, page) = get(&router, "/full/live", Some(&cookie)).await;
+    for text in ["Anthropic", "OpenAI", "Anthropic API key"] {
+        assert!(page.contains(text), "missing {text:?}");
+    }
+
+    assert!(visitor.set_provider(Provider::OpenAi));
+    let (_, page) = get(&router, "/full/live", Some(&cookie)).await;
+    assert!(page.contains("OpenAI API key"));
+    assert!(page.contains(Provider::OpenAi.keys_url()));
+    assert!(!page.contains("platform.claude.com"));
+}
+
+#[tokio::test]
+async fn the_model_list_follows_the_provider() {
+    let (_fake, demo) = setup().await;
+    let (router, cookie, visitor) = page_visitor(&demo);
+    visitor.set_provider(Provider::OpenAi);
+    visitor.set_key(OPENAI_KEY).unwrap();
+
+    let (_, page) = get(&router, "/full/live", Some(&cookie)).await;
+    for model in Model::for_provider(Provider::OpenAi) {
+        let option = format!("<option value=\"{}\"", model.id());
+        assert!(page.contains(&option), "missing {option}");
+    }
+    for model in Model::for_provider(Provider::Anthropic) {
+        assert!(!page.contains(model.id()), "shows {}", model.id());
+    }
+    assert!(page.contains("Billed to your OpenAI account"));
 }
 
 #[tokio::test]
 async fn the_key_never_appears_in_pages_or_printed_state() {
+    key_stays_out_of_pages(Provider::Anthropic, KEY_A, "visitor-a").await;
+    key_stays_out_of_pages(Provider::OpenAi, OPENAI_KEY, "visitor-c").await;
+}
+
+/// Has a conversation with a reply, a tool call and an error in it, then checks that
+/// no page and nothing printable shows `key` or the distinctive `part` of it.
+async fn key_stays_out_of_pages(provider: Provider, key: &str, part: &str) {
     let (_fake, demo) = setup().await;
     let router = site(&demo);
     let token = Token::random();
     let cookie = format!("__Host-demo={}", token.encode());
     let visitor = demo.visitor(&token.hash()).unwrap();
-    visitor.set_key(KEY_A).unwrap();
+    visitor.set_provider(provider);
+    visitor.set_key(key).unwrap();
 
-    // A conversation with a reply, a tool call and an error in it.
     assert!(visitor.send(&demo, "What is 3 * 3?", ip(13)));
     settle(&visitor).await;
     assert!(visitor.send(&demo, "[401] and this?", ip(13)));
     settle(&visitor).await;
 
-    for path in ["/full/claude", "/blocks", "/full/chat-app", "/"] {
+    for path in ["/full/live", "/blocks", "/full/chat-app", "/"] {
         let (response, body) = get(&router, path, Some(&cookie)).await;
         assert_eq!(response.status(), 200, "{path}");
-        assert!(!body.contains(KEY_A), "{path} shows the key");
-        assert!(!body.contains("visitor-a"), "{path} shows part of the key");
+        assert!(!body.contains(key), "{path} shows the key");
+        assert!(!body.contains(part), "{path} shows part of the key");
         for value in response.headers().values() {
-            assert!(!value.to_str().unwrap_or_default().contains(KEY_A));
+            assert!(!value.to_str().unwrap_or_default().contains(key));
         }
     }
-    let (_, page) = get(&router, "/full/claude", Some(&cookie)).await;
+    let (_, page) = get(&router, "/full/live", Some(&cookie)).await;
     assert!(page.contains("Clear key"), "the page shows the key is set");
     assert!(page.contains("The API key was rejected"));
     assert!(page.contains("calculate"));
@@ -637,8 +782,320 @@ async fn the_key_never_appears_in_pages_or_printed_state() {
             ));
         }
     }
-    printed.push(format!("{:?}", super::key::ApiKey::parse(KEY_A).unwrap()));
+    printed.push(format!(
+        "{:?}",
+        super::key::ApiKey::parse(provider, key).unwrap()
+    ));
     for text in printed {
-        assert!(!text.contains(KEY_A), "{text}");
+        assert!(!text.contains(key), "{text}");
     }
+}
+
+// The same behavior against OpenAI's Responses API, through the fake's OpenAI mode.
+
+/// A new visitor on `provider` with `key` set.
+fn visitor_with(demo: &Demo, provider: Provider, key: &str) -> Arc<Visitor> {
+    let visitor = demo.visitor(&session()).unwrap();
+    visitor.set_provider(provider);
+    visitor.set_key(key).unwrap();
+    visitor
+}
+
+fn kinds(reply: &ReplyView) -> Vec<&'static str> {
+    reply
+        .parts
+        .iter()
+        .map(|part| match part {
+            Part::Thinking { .. } => "thinking",
+            Part::Tool { .. } => "tool",
+            Part::Text(_) => "text",
+        })
+        .collect()
+}
+
+/// The `input` items of the last request the fake received.
+fn last_input(fake: &FakeApi) -> Vec<Value> {
+    fake.requests().last().unwrap().body["input"]
+        .as_array()
+        .unwrap()
+        .clone()
+}
+
+#[tokio::test]
+async fn openai_streams_reasoning_a_tool_call_and_text() {
+    let (fake, demo) = setup().await;
+    let visitor = visitor_with(&demo, Provider::OpenAi, OPENAI_KEY);
+    assert!(visitor.send(&demo, "what is 2+2", ip(40)));
+
+    let reply = last_reply(&settle(&visitor).await);
+    assert_eq!(reply.state, ReplyState::Done, "{:?}", reply.notice);
+    assert!(reply.notice.is_none());
+    assert_eq!(
+        kinds(&reply),
+        ["thinking", "text", "tool", "thinking", "text"]
+    );
+    let Part::Tool {
+        name,
+        status,
+        input,
+        output,
+        ..
+    } = &reply.parts[2]
+    else {
+        unreachable!()
+    };
+    assert_eq!(name, "calculate");
+    assert_eq!(*status, ToolStatus::Completed);
+    assert_eq!(
+        serde_json::from_str::<Value>(input).unwrap(),
+        json!({"expression": "2+2"})
+    );
+    assert!(output.as_deref().unwrap().contains('4'));
+    let Part::Thinking {
+        text, streaming, ..
+    } = &reply.parts[0]
+    else {
+        unreachable!()
+    };
+    assert!(text.contains("calculate"));
+    assert!(!streaming);
+
+    let requests = fake.requests();
+    assert_eq!(requests.len(), 2);
+    for request in &requests {
+        assert_eq!(request.authorization, format!("Bearer {OPENAI_KEY}"));
+        assert_eq!(request.api_key, "");
+        assert_eq!(request.path, "/v1/responses");
+        assert_eq!(request.body["model"], Provider::OpenAi.default_model().id());
+        assert_eq!(request.body["store"], false);
+        assert_eq!(request.body["stream"], true);
+        assert_eq!(request.body["max_output_tokens"], MAX_TOKENS);
+        assert_eq!(request.body["reasoning"]["summary"], "auto");
+    }
+    let second = requests[1].body["input"].as_array().unwrap();
+    let call = &second[second.len() - 2];
+    let result = &second[second.len() - 1];
+    assert_eq!(call["type"], "function_call");
+    assert_eq!(result["type"], "function_call_output");
+    assert_eq!(result["call_id"], call["call_id"]);
+    assert_eq!(result["output"], "4");
+    // The reasoning item goes back as it came, encrypted content included.
+    assert_eq!(second[1]["type"], "reasoning");
+    assert!(second[1]["encrypted_content"].is_string());
+
+    // The conversation continues from the full history.
+    assert!(visitor.send(&demo, "[text] thanks", ip(40)));
+    assert_eq!(last_reply(&settle(&visitor).await).state, ReplyState::Done);
+    let third = last_input(&fake);
+    assert_eq!(&third[..second.len()], second.as_slice());
+}
+
+#[tokio::test]
+async fn openai_api_errors_render_as_notices() {
+    let (_fake, demo) = setup().await;
+    let cases = [
+        ("[401]", "(401)", "rejected", true),
+        ("[429]", "(429)", "rate limit", false),
+        ("[500]", "(500)", "internal error", false),
+        ("[503]", "(503)", "overloaded", false),
+    ];
+    for (marker, code, phrase, key_problem) in cases {
+        let visitor = visitor_with(&demo, Provider::OpenAi, OPENAI_KEY);
+        assert!(visitor.send(&demo, &format!("{marker} hello"), ip(41)));
+        let reply = last_reply(&settle(&visitor).await);
+        assert_eq!(reply.state, ReplyState::Failed, "{marker}");
+        let notice = reply.notice.expect("a notice");
+        assert!(notice.error);
+        assert!(notice.text.contains(code), "{marker}: {}", notice.text);
+        assert!(notice.text.contains(phrase), "{marker}: {}", notice.text);
+        assert_eq!(notice.key_problem, key_problem, "{marker}");
+        assert!(!notice.text.contains(OPENAI_KEY));
+        assert_eq!(visitor.api_history().len(), 1);
+    }
+}
+
+#[tokio::test]
+async fn openai_no_credit_is_a_billing_notice() {
+    let (_fake, demo) = setup().await;
+    let visitor = visitor_with(&demo, Provider::OpenAi, OPENAI_KEY);
+    assert!(visitor.send(&demo, "[402] hello", ip(42)));
+    let reply = last_reply(&settle(&visitor).await);
+    let notice = reply.notice.expect("a notice");
+    assert!(notice.error);
+    assert!(notice.text.contains("(429)"), "{}", notice.text);
+    assert!(
+        notice
+            .text
+            .contains("Your OpenAI account has a billing problem"),
+        "{}",
+        notice.text
+    );
+    assert!(!notice.text.contains("rate limit"), "{}", notice.text);
+    assert!(!notice.key_problem);
+}
+
+#[tokio::test]
+async fn openai_without_reasoning_shows_no_thinking_part() {
+    let (_fake, demo) = setup().await;
+    let visitor = visitor_with(&demo, Provider::OpenAi, OPENAI_KEY);
+    assert!(visitor.send(&demo, "[nothink] hi", ip(43)));
+    let reply = last_reply(&settle(&visitor).await);
+    assert_eq!(reply.state, ReplyState::Done, "{:?}", reply.notice);
+    assert_eq!(kinds(&reply), ["text"]);
+    assert!(!reply.text().is_empty());
+}
+
+#[tokio::test]
+async fn openai_invalid_tool_arguments_become_a_tool_error() {
+    let (fake, demo) = setup().await;
+    let visitor = visitor_with(&demo, Provider::OpenAi, OPENAI_KEY);
+    assert!(visitor.send(&demo, "[badargs] 1+", ip(44)));
+    let reply = last_reply(&settle(&visitor).await);
+    assert_eq!(reply.state, ReplyState::Done, "{:?}", reply.notice);
+    let Some(Part::Tool { status, error, .. }) = reply
+        .parts
+        .iter()
+        .find(|part| matches!(part, Part::Tool { .. }))
+    else {
+        panic!("a tool part");
+    };
+    assert_eq!(*status, ToolStatus::Error);
+    assert!(error);
+    let input = last_input(&fake);
+    let output = input
+        .iter()
+        .find(|item| item["type"] == "function_call_output")
+        .expect("a function_call_output");
+    assert!(
+        output["output"]
+            .as_str()
+            .unwrap()
+            .starts_with("INVALID_JSON"),
+        "{output}"
+    );
+}
+
+#[tokio::test]
+async fn openai_error_text_never_contains_the_key() {
+    let (_fake, demo) = setup().await;
+    let visitor = visitor_with(&demo, Provider::OpenAi, OPENAI_KEY);
+    assert!(visitor.send(&demo, "[echokey] hello", ip(45)));
+    let reply = last_reply(&settle(&visitor).await);
+    let notice = reply.notice.expect("a notice");
+    assert!(notice.key_problem);
+    assert!(notice.text.contains("(401)"), "{}", notice.text);
+    let tail = &OPENAI_KEY[OPENAI_KEY.len() - 20..];
+    assert!(!notice.text.contains(OPENAI_KEY), "{}", notice.text);
+    assert!(!notice.text.contains(tail), "{}", notice.text);
+}
+
+#[tokio::test]
+async fn openai_stop_mid_stream_keeps_text() {
+    let (fake, demo) = setup().await;
+    let visitor = visitor_with(&demo, Provider::OpenAi, OPENAI_KEY);
+    assert!(visitor.send(&demo, "[slow] go", ip(46)));
+    wait_for(&visitor, |snapshot| {
+        last_reply(snapshot).text().split_whitespace().count() >= 6
+    })
+    .await;
+    visitor.stop();
+
+    let reply = last_reply(&visitor.snapshot());
+    assert_eq!(reply.state, ReplyState::Stopped);
+    let text = reply.text();
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert_eq!(last_reply(&visitor.snapshot()).text(), text);
+    assert!(text.len() < "This reply streams slowly so there is time to stop it. ".len() * 4);
+
+    // The fake rejects malformed input with a 400, so a Done reply shows the
+    // interrupted text went back as a well-formed item.
+    assert!(visitor.send(&demo, "[text] and now?", ip(46)));
+    let next = last_reply(&settle(&visitor).await);
+    assert_eq!(next.state, ReplyState::Done, "{:?}", next.notice);
+    let input = last_input(&fake);
+    assert_eq!(
+        input[1],
+        json!({"type": "message", "role": "assistant", "content": text})
+    );
+}
+
+#[tokio::test]
+async fn openai_stop_during_tool_call_cancels_it() {
+    let (fake, demo) = setup().await;
+    let visitor = visitor_with(&demo, Provider::OpenAi, OPENAI_KEY);
+    assert!(visitor.send(&demo, "2 + 2", ip(47)));
+    wait_for(&visitor, |snapshot| {
+        last_reply(snapshot)
+            .parts
+            .iter()
+            .any(|part| matches!(part, Part::Tool { .. }))
+    })
+    .await;
+    visitor.stop();
+    let reply = last_reply(&visitor.snapshot());
+    let Some(Part::Tool { status, .. }) = reply
+        .parts
+        .iter()
+        .find(|part| matches!(part, Part::Tool { .. }))
+    else {
+        unreachable!()
+    };
+    assert_eq!(*status, ToolStatus::Error);
+
+    assert!(visitor.send(&demo, "[text] ok", ip(47)));
+    let next = last_reply(&settle(&visitor).await);
+    assert_eq!(next.state, ReplyState::Done, "{:?}", next.notice);
+    // No function_call without its output went back.
+    assert!(
+        !last_input(&fake)
+            .iter()
+            .any(|item| item["type"] == "function_call")
+    );
+}
+
+#[tokio::test]
+async fn openai_regenerate_adds_a_branch() {
+    let (fake, demo) = setup().await;
+    let visitor = visitor_with(&demo, Provider::OpenAi, OPENAI_KEY);
+    assert!(visitor.send(&demo, "[text] one", ip(48)));
+    settle(&visitor).await;
+    assert!(visitor.regenerate(&demo, ip(48)));
+    let snapshot = settle(&visitor).await;
+    assert_eq!(snapshot.turns[0].replies.len(), 2);
+    assert_eq!(snapshot.turns[0].current, 1);
+    assert_eq!(
+        last_reply(&snapshot).state,
+        ReplyState::Done,
+        "{:?}",
+        last_reply(&snapshot).notice
+    );
+    // The regenerated request is the question alone.
+    assert_eq!(
+        last_input(&fake),
+        [json!({"type": "message", "role": "user", "content": "[text] one"})]
+    );
+
+    assert!(visitor.select_branch(snapshot.turns[0].id, 0));
+    assert_eq!(visitor.snapshot().turns[0].current, 0);
+}
+
+#[tokio::test]
+async fn openai_midstream_error_keeps_text() {
+    let (fake, demo) = setup().await;
+    let visitor = visitor_with(&demo, Provider::OpenAi, OPENAI_KEY);
+    assert!(visitor.send(&demo, "[midstream] go", ip(49)));
+    let reply = last_reply(&settle(&visitor).await);
+    assert_eq!(reply.state, ReplyState::Failed);
+    let notice = reply.notice.clone().unwrap();
+    assert!(notice.text.contains("overloaded"), "{}", notice.text);
+    assert!(notice.text.contains("mid-stream"), "{}", notice.text);
+    assert_eq!(reply.text(), "This reply starts, and then");
+
+    assert!(visitor.send(&demo, "[text] again", ip(49)));
+    let next = last_reply(&settle(&visitor).await);
+    assert_eq!(next.state, ReplyState::Done, "{:?}", next.notice);
+    assert_eq!(
+        last_input(&fake)[1],
+        json!({"type": "message", "role": "assistant", "content": "This reply starts, and then"})
+    );
 }
