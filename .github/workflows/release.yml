@@ -1,0 +1,63 @@
+# Publishes topcoat-prompt to crates.io when a version tag such as v0.2.0 is pushed.
+#
+# Uses crates.io trusted publishing: the job trades GitHub's OIDC token for a
+# short-lived crates.io token, so no crates.io secret is stored in this repository.
+# The crate's trusted-publisher settings on crates.io must name this repository,
+# this workflow file (release.yml) and the `crates-io` environment.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # Settings > Environments > crates-io can require an approval before publishing.
+    environment: crates-io
+    permissions:
+      contents: read
+      # Lets the job request the OIDC token that crates.io trusts.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Only publish commits that are on main, and only when the tag matches the
+      # version in Cargo.toml, so a stray or mistyped tag cannot release anything.
+      - name: Check the tag
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "topcoat-prompt") | .version')
+          echo "tag $tag, Cargo.toml $version"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::Tag v$tag does not match topcoat-prompt $version in Cargo.toml"
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME is not on main"
+            exit 1
+          fi
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Packages and verifies the crate without uploading, before asking for a token.
+      - name: Dry run
+        run: cargo publish -p topcoat-prompt --dry-run --locked
+
+      - name: Get a crates.io token
+        id: auth
+        uses: rust-lang/crates-io-auth-action@v1
+
+      - name: Publish
+        run: cargo publish -p topcoat-prompt --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
