@@ -58,7 +58,7 @@ fn main() {
 | `message` | A message row by role (user, assistant, system), with an avatar, content as a bubble or flat, and an actions toolbar shown on hover or focus. |
 | `prompt_input` | A form with an auto-growing text area (Enter sends, Shift+Enter adds a line), a toolbar, tool buttons, and a submit button that becomes Stop while a response is on its way. |
 | `markdown` | Server-side markdown with GFM tables, task lists and strikethrough. Raw HTML is shown as text and only `http`, `https` and `mailto` links are kept, so model output is safe to render. Tolerates half-streamed input. |
-| `code_block` | A code block with its language and a copy button; takes plain text or pre-rendered (highlighted) markup. Used by `markdown` for fenced code. |
+| `code_block` | A code block with its language and a copy button, highlighted on the server for Rust, Python, JavaScript and TypeScript (with JSX), JSON, YAML, TOML, shell, HTML, CSS, SQL, Go, C-family languages and diffs, with no extra crate. Used by `markdown` for fenced code. |
 | `copy_button` | An icon button that copies text and confirms with a check. |
 | `reasoning` | A collapsible "Thinking…" section, open while it streams and collapsed to "Thought for N seconds" after. |
 | `tool_call` | A collapsible card per tool call with a status badge (pending, running, completed, error), input, and output. |
@@ -127,8 +127,9 @@ The site has one source of truth for each thing it shows. Every example is a rea
 manual install source is the registry file itself, and the API tables are read from the
 component signatures and doc comments. `site/src/catalog.rs` lists the pages and drives
 the sidebar, previous/next links and `llms.txt`; a test fails if a registry component has
-no page or no example. Rust code is highlighted on the server by a small lexer in
-`site/src/highlight.rs`; its colors are site-only CSS at the end of `site/styles.css`.
+no page or no example, and another if a documented prop or variant has no example. Code
+panels go through the registry's own `code_block`, so the site uses the same highlighter
+and colors as an app that installs it.
 
 The **Full chat app** block (`/blocks`, and alone at `/full/chat-app`) is a working chat
 answered by a fake model (no API keys, no network). A Tokio task streams reasoning, a

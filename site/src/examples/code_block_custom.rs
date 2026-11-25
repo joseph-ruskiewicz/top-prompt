@@ -2,12 +2,12 @@ use topcoat::{
     Result,
     context::Cx,
     icon::{icon, iconify::iconify_icon},
-    view::{View, component, view},
+    view::{Unescaped, View, component, view},
 };
 
 use crate::components::{
     button::{ButtonSize, ButtonVariant, button_variants},
-    code_block::{code_block_copy, code_block_header},
+    code_block::{TOKEN_COLORS, code_block_copy, code_block_header, highlight},
 };
 
 const CONFIG: &str = "[server]
@@ -44,7 +44,13 @@ pub async fn example(cx: &Cx) -> Result<impl View> {
                 code_block_copy(text: CONFIG)
             )
             <pre class="overflow-x-auto p-4 font-mono text-sm leading-relaxed">
-                <code>(CONFIG)</code>
+                // `highlight` returns escaped markup, and `TOKEN_COLORS` colors it.
+                <code class=(TOKEN_COLORS)>
+                    match highlight("toml", CONFIG) {
+                        Some(html) => (Unescaped::new_unchecked(html)),
+                        None => (CONFIG),
+                    }
+                </code>
             </pre>
             <figcaption
                 class="border-t border-border px-4 py-2 text-xs text-muted-foreground"

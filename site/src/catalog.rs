@@ -151,22 +151,32 @@ pub static COMPONENTS: &[ComponentDoc] = &[
             example!(
                 code_block_basic,
                 "Code block",
-                "`code` is shown as plain text and copied by the button; `language` labels the header."
+                "`code` is highlighted for its `language`, which also labels the header. The copy button copies `code`."
             ),
             example!(
-                code_block_highlighted,
-                "Highlighted code",
-                "Highlight on the server and pass the markup as children. `code` stays the plain text the button copies."
+                code_block_languages,
+                "Languages",
+                "Rust, Python, JavaScript and TypeScript with JSX, JSON, YAML, TOML, shell, HTML, CSS, SQL, Go, C-family and diffs are highlighted on the server, with common aliases such as `py`, `ts`, `sh` and `yml`."
             ),
             example!(
                 code_block_plain,
-                "Output without a language",
-                "Without `language` the header gets a generic label. Long lines scroll instead of wrapping, and classes in `attrs` can cap the height."
+                "Plain text",
+                "Without `language`, or with one the highlighter does not know, the code is plain text and the header reads \"Code\" or the language. Long lines scroll instead of wrapping, and classes in `attrs` can cap the height."
+            ),
+            example!(
+                code_block_opt_out,
+                "Turning highlighting off",
+                "`highlight: false` shows plain text even for a supported language."
+            ),
+            example!(
+                code_block_markup,
+                "Your own markup",
+                "Child content replaces the text inside `<code>`, for emphasis of your own or another highlighter. `code` stays the text the button copies."
             ),
             example!(
                 code_block_custom,
                 "Your own frame",
-                "`code_block_header` and `code_block_copy` also work on their own, for a block with more actions, such as a download link."
+                "`code_block_header` and `code_block_copy` also work on their own. `highlight` returns the escaped markup and `TOKEN_COLORS` colors it, for a block with more actions, such as a download link."
             ),
         ],
     },
@@ -329,9 +339,14 @@ pub static COMPONENTS: &[ComponentDoc] = &[
                 "Headings, lists, tables, task lists, links and fenced code, rendered on the server."
             ),
             example!(
+                markdown_code,
+                "Code",
+                "Fenced code renders as a `code_block`, highlighted for the fence's language. An unknown or missing language shows plain text."
+            ),
+            example!(
                 markdown_streaming,
                 "Streaming",
-                "Render the text received so far on every update. Half a code fence or half a link renders as far as it goes."
+                "Render the text received so far on every update. Half a code fence or half a link renders as far as it goes, and the code is highlighted as it arrives."
             ),
             example!(
                 markdown_untrusted,
