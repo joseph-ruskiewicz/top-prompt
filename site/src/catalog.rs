@@ -680,7 +680,8 @@ pub static BLOCKS: &[Block] = &[
             chat_app,
             "Full chat app",
             "A working chat answered by a fake model: a Tokio task streams reasoning, a tool \
-             call and a markdown answer. The conversation is shared by everyone viewing it."
+             call and a markdown answer. The conversation is shared by everyone viewing it. \
+             The real-model demo below runs the same components on the Claude API."
         ),
     },
 ];
@@ -775,7 +776,8 @@ pub fn llms_txt() -> String {
          ## Docs\n\n\
          - [Introduction](/docs/introduction): what topcoat-prompt is and how it works\n\
          - [Installation](/docs/installation): adding the registry and installing components\n\
-         - [Blocks](/blocks): larger composed examples, including a full chat app\n\n\
+         - [Blocks](/blocks): larger composed examples, including a full chat app\n\
+         - [Real model demo](/full/claude): the chat app on the Claude API, with your own key\n\n\
          ## Components\n\n",
     );
     for doc in COMPONENTS {

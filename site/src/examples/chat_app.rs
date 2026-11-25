@@ -112,6 +112,12 @@ async fn chat_panel(cx: &Cx, snapshot: Snapshot, draft: Signal<String>) -> Resul
                                 )
                             }
                         )
+                        <a
+                            href="/full/claude"
+                            class="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                        >
+                            "Try it with the real Claude API, on your own key"
+                        </a>
                     )
                 }
                 #[key(entry.id)]
