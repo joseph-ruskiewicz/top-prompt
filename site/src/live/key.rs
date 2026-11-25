@@ -13,6 +13,10 @@ const OPENAI_PREFIX: &str = "sk-";
 /// The longest key accepted, in bytes. Real keys are a few hundred at most.
 const MAX_LEN: usize = 256;
 
+/// The shortest run of a key's characters that [`ApiKey::scrub`] removes from text.
+/// Shorter than any key, and long enough that ordinary words rarely match.
+const SCRUB_RUN: usize = 8;
+
 /// An API key a visitor entered, for one provider.
 ///
 /// `Debug` and `Display` print `[redacted]`, so the key cannot reach a log line, an
@@ -100,10 +104,47 @@ impl ApiKey {
         &self.0
     }
 
-    /// `text` with any copy of the key replaced, for text that came back from the
-    /// API and is about to be shown.
+    /// `text` with any copy of the key, or of a run of [`SCRUB_RUN`] or more of its
+    /// characters, replaced, for text that came back from the API and is about to be
+    /// shown. An API may echo a key masked or cut short, so partial copies go too.
     pub fn scrub(&self, text: &str) -> String {
-        text.replace(&self.0, "[redacted]")
+        let text_bytes = text.as_bytes();
+        let key = self.0.as_bytes();
+        // `run[j]` is the length of the common substring of the text and the key
+        // ending at the current text byte and at key byte `j`.
+        let mut run = vec![0usize; key.len()];
+        let mut hidden = vec![false; text_bytes.len()];
+        for (i, &byte) in text_bytes.iter().enumerate() {
+            for j in (0..key.len()).rev() {
+                run[j] = if key[j] != byte {
+                    0
+                } else if j == 0 {
+                    1
+                } else {
+                    run[j - 1] + 1
+                };
+                if run[j] >= SCRUB_RUN {
+                    hidden[i + 1 - run[j]..=i].fill(true);
+                }
+            }
+        }
+        // Keys are ASCII, so every hidden run starts and ends on a character
+        // boundary.
+        let mut scrubbed = String::with_capacity(text.len());
+        let mut start = 0;
+        while start < text_bytes.len() {
+            let end = hidden[start..]
+                .iter()
+                .position(|&flag| flag != hidden[start])
+                .map_or(text_bytes.len(), |length| start + length);
+            if hidden[start] {
+                scrubbed.push_str("[redacted]");
+            } else {
+                scrubbed.push_str(&text[start..end]);
+            }
+            start = end;
+        }
+        scrubbed
     }
 }
 
@@ -221,5 +262,19 @@ mod tests {
     fn scrubs_copies_from_text() {
         let key = ApiKey::parse(Provider::Anthropic, KEY).unwrap();
         assert_eq!(key.scrub(&format!("bad key {KEY}!")), "bad key [redacted]!");
+        assert_eq!(key.scrub("no key here"), "no key here");
+        // Partial copies: a tail, a masked form, and a copy cut short.
+        let tail = &KEY[KEY.len() - 20..];
+        assert_eq!(
+            key.scrub(&format!("ends in {tail}.")),
+            "ends in [redacted]."
+        );
+        assert_eq!(
+            key.scrub(&format!("{}****{}", &KEY[..12], &KEY[KEY.len() - 4..])),
+            format!("[redacted]****{}", &KEY[KEY.len() - 4..])
+        );
+        assert_eq!(key.scrub(&KEY[..30]), "[redacted]");
+        // Text around the key keeps its characters, multi-byte ones included.
+        assert_eq!(key.scrub(&format!("é{KEY}ü")), "é[redacted]ü");
     }
 }

@@ -1,6 +1,6 @@
 //! What every provider's API shares: the HTTP client, the streamed response, the
 //! errors and the updates a stream produces for the page. The wire formats are in
-//! the adapter modules, such as [`super::anthropic`].
+//! the adapter modules, [`super::anthropic`] and [`super::openai`].
 
 use std::{fmt, time::Duration};
 
@@ -10,6 +10,7 @@ use serde_json::Value;
 use super::{
     anthropic,
     key::ApiKey,
+    openai,
     provider::{Model, Provider},
     sse,
 };
@@ -26,14 +27,11 @@ Answer concisely. You have two tools: search_components looks up topcoat-prompt 
 components by keyword, and calculate evaluates arithmetic exactly. Use them when they \
 help answer.";
 
-/// The only OpenAI host the key is ever sent to in a release build.
-const OPENAI_PRODUCTION_URL: &str = "https://api.openai.com";
-
 /// The production base URL of `provider`'s API.
 fn production_url(provider: Provider) -> &'static str {
     match provider {
         Provider::Anthropic => anthropic::PRODUCTION_URL,
-        Provider::OpenAi => OPENAI_PRODUCTION_URL,
+        Provider::OpenAi => openai::PRODUCTION_URL,
     }
 }
 
@@ -70,11 +68,9 @@ impl Endpoint {
         Self(url.trim_end_matches('/').to_owned())
     }
 
-    /// Whether this is one of the production APIs.
-    pub fn is_production(&self) -> bool {
-        Provider::ALL
-            .into_iter()
-            .any(|provider| self.0 == production_url(provider))
+    /// Whether this is `provider`'s production API.
+    pub fn is_production(&self, provider: Provider) -> bool {
+        self.0 == production_url(provider)
     }
 }
 
@@ -100,7 +96,7 @@ struct Route {
 }
 
 impl Route {
-    fn new(endpoint: Endpoint) -> Self {
+    fn new(provider: Provider, endpoint: Endpoint) -> Self {
         let http = reqwest::Client::builder()
             // A redirect would carry the key's header to wherever it points; the
             // APIs do not redirect, so none are followed.
@@ -108,7 +104,7 @@ impl Route {
             // Proxy settings in the environment are ignored: the key goes straight
             // to the API.
             .no_proxy()
-            .https_only(endpoint.is_production())
+            .https_only(endpoint.is_production(provider))
             .connect_timeout(Duration::from_secs(10))
             // Thinking can leave the stream quiet for a while, though the API sends
             // pings; a minute of silence means it is gone.
@@ -126,8 +122,8 @@ impl Client {
         // only if a provider is already installed, which is just as good.
         let _ = rustls::crypto::ring::default_provider().install_default();
         Self {
-            anthropic: Route::new(endpoints.anthropic),
-            openai: Route::new(endpoints.openai),
+            anthropic: Route::new(Provider::Anthropic, endpoints.anthropic),
+            openai: Route::new(Provider::OpenAi, endpoints.openai),
         }
     }
 
@@ -145,7 +141,7 @@ impl Client {
         };
         let (path, mut headers) = match provider {
             Provider::Anthropic => (anthropic::PATH, anthropic::headers(key)?),
-            Provider::OpenAi => unimplemented!("OpenAI adapter: Task 4"),
+            Provider::OpenAi => (openai::PATH, openai::headers(key)?),
         };
         headers.insert("content-type", HeaderValue::from_static("application/json"));
 
@@ -209,7 +205,9 @@ impl Stream {
     }
 }
 
-/// The kinds of error the APIs report, named after the Anthropic `error.type`s.
+/// The kinds of error the APIs report, named after the Anthropic `error.type`s. Each
+/// adapter maps its provider's statuses and codes onto them; the OpenAI mapping is in
+/// [`super::openai`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ErrorKind {
     /// 400 `invalid_request_error`, also used for a spend limit the organization set.
@@ -240,6 +238,8 @@ pub enum ErrorKind {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ApiError {
     /// An error the API returned, as a response or as an error event mid-stream.
+    /// Adapters build it with [`ApiError::api`], which removes the key from the
+    /// message; never construct it directly from API text.
     Api {
         /// The HTTP status, or `None` for an error event in a stream.
         status: Option<u16>,
@@ -268,7 +268,8 @@ impl ApiError {
         Self::Api {
             status,
             kind,
-            message: key.scrub(&truncate(message, 500)),
+            // Scrubbed before it is shortened, so a cut cannot leave half a key.
+            message: truncate(&key.scrub(message), 500),
             retry_after,
         }
     }
@@ -408,10 +409,11 @@ mod tests {
     fn the_production_endpoints_are_https() {
         for provider in Provider::ALL {
             assert!(production_url(provider).starts_with("https://"));
-            assert!(Endpoint::production(provider).is_production());
+            assert!(Endpoint::production(provider).is_production(provider));
+            assert!(!Endpoint::local("http://127.0.0.1:1").is_production(provider));
         }
         assert_eq!(anthropic::PRODUCTION_URL, "https://api.anthropic.com");
-        assert_eq!(OPENAI_PRODUCTION_URL, "https://api.openai.com");
-        assert!(!Endpoint::local("http://127.0.0.1:1").is_production());
+        assert_eq!(openai::PRODUCTION_URL, "https://api.openai.com");
+        assert!(!Endpoint::production(Provider::OpenAi).is_production(Provider::Anthropic));
     }
 }

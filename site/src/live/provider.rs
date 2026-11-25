@@ -8,7 +8,7 @@ use super::{
     anthropic,
     api::{ApiError, Update},
     key::ApiKey,
-    sse,
+    openai, sse,
 };
 
 /// Whose API answers the visitor. One key for one provider at a time.
@@ -69,18 +69,17 @@ impl Provider {
     pub fn user_items(self, text: &str) -> Vec<Value> {
         match self {
             Self::Anthropic => anthropic::user_items(text),
-            // A placeholder, not a panic, because `send` builds the history while it
-            // holds the visitor's lock (OpenAI adapter: Task 4).
-            Self::OpenAi => Vec::new(),
+            Self::OpenAi => openai::user_items(text),
         }
     }
 
     /// The history items for the text of a reply that was stopped or failed, kept
-    /// as the assistant's.
+    /// as the assistant's. `Visitor::stop` calls it with the visitor's lock held, so
+    /// no adapter may panic here.
     pub fn interrupted_items(self, text: &str) -> Vec<Value> {
         match self {
             Self::Anthropic => anthropic::interrupted_items(text),
-            Self::OpenAi => unimplemented!("OpenAI adapter: Task 4"),
+            Self::OpenAi => openai::interrupted_items(text),
         }
     }
 
@@ -89,7 +88,7 @@ impl Provider {
     pub fn tool_result_items(self, results: &[(ToolCall, String, bool)]) -> Vec<Value> {
         match self {
             Self::Anthropic => anthropic::tool_result_items(results),
-            Self::OpenAi => unimplemented!("OpenAI adapter: Task 4"),
+            Self::OpenAi => openai::tool_result_items(results),
         }
     }
 
@@ -97,7 +96,7 @@ impl Provider {
     pub fn request_body(self, model: Model, history: &[Value]) -> Value {
         match self {
             Self::Anthropic => anthropic::request_body(model, history),
-            Self::OpenAi => unimplemented!("OpenAI adapter: Task 4"),
+            Self::OpenAi => openai::request_body(model, history),
         }
     }
 
@@ -114,7 +113,7 @@ impl Provider {
     pub fn stream_state(self) -> StreamState {
         match self {
             Self::Anthropic => StreamState::Anthropic(anthropic::Accumulator::default()),
-            Self::OpenAi => unimplemented!("OpenAI adapter: Task 4"),
+            Self::OpenAi => StreamState::OpenAi(openai::Accumulator::default()),
         }
     }
 
@@ -129,7 +128,7 @@ impl Provider {
     ) -> ApiError {
         match self {
             Self::Anthropic => anthropic::parse_error(status, body, retry_after, key),
-            Self::OpenAi => unimplemented!("OpenAI adapter: Task 4"),
+            Self::OpenAi => openai::parse_error(status, body, retry_after, key),
         }
     }
 }
@@ -168,6 +167,7 @@ pub struct Finished {
 /// Reads one streamed response, in the provider's format.
 pub enum StreamState {
     Anthropic(anthropic::Accumulator),
+    OpenAi(openai::Accumulator),
 }
 
 impl StreamState {
@@ -175,6 +175,7 @@ impl StreamState {
     pub fn apply(&mut self, event: &sse::Event, key: &ApiKey) -> Result<Vec<Update>, ApiError> {
         match self {
             Self::Anthropic(message) => Ok(message.apply(event, key)?.into_iter().collect()),
+            Self::OpenAi(response) => response.apply(event, key),
         }
     }
 
@@ -182,6 +183,7 @@ impl StreamState {
     pub fn finished(&self) -> Option<Finished> {
         match self {
             Self::Anthropic(message) => message.finished(),
+            Self::OpenAi(response) => response.finished(),
         }
     }
 }
