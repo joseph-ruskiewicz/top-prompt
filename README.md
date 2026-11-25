@@ -154,6 +154,19 @@ are not part of the registry crate's module tree, so `cargo fmt` does not reach 
 format them with `rustfmt --edition 2024 crates/topcoat-prompt/src/components/*.rs` and
 `topcoat fmt`.
 
+## Releasing
+
+1. Bump `version` in the root `Cargo.toml` in a pull request and merge it.
+2. Tag the merge commit on `main` with that version and push the tag:
+
+   ```sh
+   git tag v0.2.1 && git push origin v0.2.1
+   ```
+
+The release workflow (`.github/workflows/release.yml`) checks that the tag matches
+`Cargo.toml` and is on `main`, then publishes `topcoat-prompt` through crates.io trusted
+publishing, so no crates.io token is stored in the repository.
+
 ## License
 
 MIT
