@@ -559,10 +559,21 @@ async fn get(
 }
 
 #[tokio::test]
+async fn old_address_redirects_to_live() {
+    let (_fake, demo) = setup().await;
+    let router = site(&demo);
+    let (response, _) = get(&router, "/full/claude", None).await;
+    assert_eq!(response.status(), 308);
+    assert_eq!(response.headers().get("location").unwrap(), "/full/live");
+    let (response, _) = get(&router, "/full/live", None).await;
+    assert_eq!(response.status(), 200);
+}
+
+#[tokio::test]
 async fn the_first_load_sets_a_strict_session_cookie() {
     let (_fake, demo) = setup().await;
     let router = site(&demo);
-    let (response, body) = get(&router, "/full/claude", None).await;
+    let (response, body) = get(&router, "/full/live", None).await;
     assert_eq!(response.status(), 200);
     let cookie = response
         .headers()
@@ -593,7 +604,7 @@ async fn the_first_load_sets_a_strict_session_cookie() {
 
     // The same cookie finds the same visitor on the next load.
     let token = cookie.split(';').next().unwrap();
-    let (again, _) = get(&router, "/full/claude", Some(token)).await;
+    let (again, _) = get(&router, "/full/live", Some(token)).await;
     assert!(again.headers().get("set-cookie").is_none());
 }
 
@@ -612,7 +623,7 @@ async fn the_key_never_appears_in_pages_or_printed_state() {
     assert!(visitor.send(&demo, "[401] and this?", ip(13)));
     settle(&visitor).await;
 
-    for path in ["/full/claude", "/blocks", "/full/chat-app", "/"] {
+    for path in ["/full/live", "/blocks", "/full/chat-app", "/"] {
         let (response, body) = get(&router, path, Some(&cookie)).await;
         assert_eq!(response.status(), 200, "{path}");
         assert!(!body.contains(KEY_A), "{path} shows the key");
@@ -621,7 +632,7 @@ async fn the_key_never_appears_in_pages_or_printed_state() {
             assert!(!value.to_str().unwrap_or_default().contains(KEY_A));
         }
     }
-    let (_, page) = get(&router, "/full/claude", Some(&cookie)).await;
+    let (_, page) = get(&router, "/full/live", Some(&cookie)).await;
     assert!(page.contains("Clear key"), "the page shows the key is set");
     assert!(page.contains("The API key was rejected"));
     assert!(page.contains("calculate"));

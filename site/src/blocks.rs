@@ -45,7 +45,7 @@ pub async fn page(cx: &Cx) -> Result<impl View> {
                      only, and every message bills your Anthropic account."
                 </p>
                 <a
-                    href="/full/claude"
+                    href="/full/live"
                     class=(button_variants(ButtonVariant::Outline, ButtonSize::Md))
                 >
                     "Open the real-model demo"

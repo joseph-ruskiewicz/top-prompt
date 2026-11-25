@@ -1,7 +1,7 @@
 //! The real-model chat page: a key form, then the conversation.
 //!
 //! The page reads the visitor's session from the `__Host-demo` cookie, which the
-//! `/full/claude` layer sets on the first load. Procedures look the visitor up the
+//! `/full/live` layer sets on the first load. Procedures look the visitor up the
 //! same way. The key reaches the server once, in the body of the `save_key`
 //! procedure call; it is never put in a signal, so it is never rendered into the
 //! page or sent back in a runtime message.
@@ -124,7 +124,7 @@ async fn demo_panel(
                     variant: SystemMessageVariant::Warning,
                     "This page needs its session cookie."
                     system_message_cta(
-                        attrs: attributes! { href="/full/claude" },
+                        attrs: attributes! { href="/full/live" },
                         "Reload"
                     )
                 )

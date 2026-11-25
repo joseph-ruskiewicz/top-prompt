@@ -1,4 +1,4 @@
-//! `/full/claude`: the chat demo answered by the real Claude API, on the visitor's own
+//! `/full/live`: the chat demo answered by the real Claude API, on the visitor's own
 //! API key.
 //!
 //! Where the key goes: the browser sends it once, in the body of a `POST` to the

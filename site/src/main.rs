@@ -9,10 +9,10 @@ mod components;
 mod api;
 mod blocks;
 mod catalog;
-mod claude;
 mod docs;
 mod examples;
 mod full;
+mod live;
 mod shell;
 
 use components::button::{ButtonSize, ButtonVariant, button_variants};
@@ -34,8 +34,8 @@ use topcoat::{
 };
 
 use crate::{
-    claude::{api::Endpoint, chat::Demo, cookie::StrictSessionCookie},
     examples::chat_app::Chat,
+    live::{api::Endpoint, chat::Demo, cookie::StrictSessionCookie},
 };
 
 /// Where the GitHub links point. A placeholder until the repository is public.
@@ -50,12 +50,12 @@ async fn main() {
 }
 
 /// Where the real-model demo sends requests: the Claude API. A debug build started
-/// with `DEMO_FAKE_ANTHROPIC=1` answers from a local fake instead, and one started
+/// with `DEMO_FAKE_API=1` answers from a local fake instead, and one started
 /// with `DEMO_ANTHROPIC_BASE_URL` uses that URL; release builds ignore both.
 async fn endpoint() -> Endpoint {
     #[cfg(debug_assertions)]
-    if std::env::var_os("DEMO_FAKE_ANTHROPIC").is_some() {
-        let fake = claude::fake::FakeApi::start().await.unwrap();
+    if std::env::var_os("DEMO_FAKE_API").is_some() {
+        let fake = live::fake::FakeApi::start().await.unwrap();
         return Endpoint::local(fake.url());
     }
     Endpoint::from_env()
