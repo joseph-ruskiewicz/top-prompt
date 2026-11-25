@@ -12,7 +12,8 @@ use topcoat::{
 };
 
 use super::{
-    api::{Endpoint, MAX_TOKENS},
+    anthropic::API_VERSION,
+    api::{Endpoint, Endpoints, MAX_TOKENS},
     chat::{
         Demo, IDLE_TIMEOUT, IP_REQUESTS, MAX_TURNS, Part, ReplyState, ReplyView, Snapshot,
         VISITOR_REQUESTS, Visitor,
@@ -28,7 +29,10 @@ const OPENAI_KEY: &str = "sk-proj-visitor-c-0123456789abcdefghijklmnop";
 
 async fn setup() -> (FakeApi, Demo) {
     let fake = FakeApi::start().await.unwrap();
-    let demo = Demo::new(Endpoint::local(fake.url()));
+    let demo = Demo::new(Endpoints {
+        anthropic: Endpoint::local(fake.url()),
+        openai: Endpoint::local(fake.url()),
+    });
     (fake, demo)
 }
 
@@ -156,7 +160,7 @@ async fn streams_thinking_a_tool_call_and_text() {
     assert_eq!(requests.len(), 2);
     for request in &requests {
         assert_eq!(request.api_key, KEY_A);
-        assert_eq!(request.version, super::api::API_VERSION);
+        assert_eq!(request.version, API_VERSION);
         assert_eq!(request.path, "/v1/messages");
         assert_eq!(request.body["model"], "claude-sonnet-5-5");
         assert_eq!(request.body["max_tokens"], MAX_TOKENS);

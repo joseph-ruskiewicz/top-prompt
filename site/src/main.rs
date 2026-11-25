@@ -35,7 +35,12 @@ use topcoat::{
 
 use crate::{
     examples::chat_app::Chat,
-    live::{api::Endpoint, chat::Demo, cookie::StrictSessionCookie},
+    live::{
+        api::{Endpoint, Endpoints},
+        chat::Demo,
+        cookie::StrictSessionCookie,
+        provider::Provider,
+    },
 };
 
 /// Where the GitHub links point. A placeholder until the repository is public.
@@ -43,22 +48,29 @@ pub const GITHUB_URL: &str = "https://github.com/joseph-ruskiewicz/topcoat-promp
 
 #[tokio::main]
 async fn main() {
-    let demo = Demo::new(endpoint().await);
+    let demo = Demo::new(endpoints().await);
     topcoat::start(router(demo, AssetBundle::load().unwrap()))
         .await
         .unwrap();
 }
 
-/// Where the real-model demo sends requests: the Claude API. A debug build started
-/// with `DEMO_FAKE_API=1` answers from a local fake instead, and one started
-/// with `DEMO_ANTHROPIC_BASE_URL` uses that URL; release builds ignore both.
-async fn endpoint() -> Endpoint {
+/// Where the real-model demo sends requests: each provider's production API. A
+/// debug build started with `DEMO_FAKE_API=1` answers from a local fake instead, and
+/// one started with `DEMO_ANTHROPIC_BASE_URL` or `DEMO_OPENAI_BASE_URL` uses that URL
+/// for that provider; release builds ignore all three.
+async fn endpoints() -> Endpoints {
     #[cfg(debug_assertions)]
     if std::env::var_os("DEMO_FAKE_API").is_some() {
         let fake = live::fake::FakeApi::start().await.unwrap();
-        return Endpoint::local(fake.url());
+        return Endpoints {
+            anthropic: Endpoint::local(fake.url()),
+            openai: Endpoint::local(fake.url()),
+        };
     }
-    Endpoint::from_env()
+    Endpoints {
+        anthropic: Endpoint::from_env(Provider::Anthropic),
+        openai: Endpoint::from_env(Provider::OpenAi),
+    }
 }
 
 /// The application's routes and services.

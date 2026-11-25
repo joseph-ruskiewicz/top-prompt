@@ -26,7 +26,7 @@ use tokio::{
     time::sleep,
 };
 
-use super::api::API_VERSION;
+use super::anthropic::API_VERSION;
 
 /// A running fake API.
 pub struct FakeApi {

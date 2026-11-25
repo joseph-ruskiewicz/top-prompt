@@ -7,6 +7,7 @@
 //! requests to `https://api.anthropic.com`. It is never written to disk, a cookie, a
 //! signal, a URL or a log, and its type redacts it from `Debug` and `Display`.
 
+pub mod anthropic;
 pub mod api;
 pub mod chat;
 pub mod cookie;

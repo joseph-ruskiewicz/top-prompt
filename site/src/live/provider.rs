@@ -1,4 +1,15 @@
-//! The model providers a visitor can choose, and the models each one offers.
+//! The model providers a visitor can choose, the models each one offers, and the
+//! provider-neutral interface to their APIs. Each `Provider` method dispatches to
+//! the provider's adapter module, so the conversation code never sees a wire format.
+
+use serde_json::Value;
+
+use super::{
+    anthropic,
+    api::{ApiError, Update},
+    key::ApiKey,
+    sse,
+};
 
 /// Whose API answers the visitor. One key for one provider at a time.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -49,6 +60,128 @@ impl Provider {
         match self {
             Self::Anthropic => Model::Sonnet,
             Self::OpenAi => Model::Sol,
+        }
+    }
+}
+
+impl Provider {
+    /// The history items for a user message with `text`.
+    pub fn user_items(self, text: &str) -> Vec<Value> {
+        match self {
+            Self::Anthropic => anthropic::user_items(text),
+            // A placeholder, not a panic, because `send` builds the history while it
+            // holds the visitor's lock (OpenAI adapter: Task 4).
+            Self::OpenAi => Vec::new(),
+        }
+    }
+
+    /// The history items for the text of a reply that was stopped or failed, kept
+    /// as the assistant's.
+    pub fn interrupted_items(self, text: &str) -> Vec<Value> {
+        match self {
+            Self::Anthropic => anthropic::interrupted_items(text),
+            Self::OpenAi => unimplemented!("OpenAI adapter: Task 4"),
+        }
+    }
+
+    /// The history items for a round's tool results: each call, its output text and
+    /// whether it is an error.
+    pub fn tool_result_items(self, results: &[(ToolCall, String, bool)]) -> Vec<Value> {
+        match self {
+            Self::Anthropic => anthropic::tool_result_items(results),
+            Self::OpenAi => unimplemented!("OpenAI adapter: Task 4"),
+        }
+    }
+
+    /// The streaming request body for `model` on `history`.
+    pub fn request_body(self, model: Model, history: &[Value]) -> Value {
+        match self {
+            Self::Anthropic => anthropic::request_body(model, history),
+            Self::OpenAi => unimplemented!("OpenAI adapter: Task 4"),
+        }
+    }
+
+    /// The history items, in order, made ready to send.
+    pub fn prepare_history(self, items: Vec<Value>) -> Vec<Value> {
+        match self {
+            Self::Anthropic => anthropic::prepare_history(items),
+            // The Responses API takes the items as they are.
+            Self::OpenAi => items,
+        }
+    }
+
+    /// The state for reading one streamed response.
+    pub fn stream_state(self) -> StreamState {
+        match self {
+            Self::Anthropic => StreamState::Anthropic(anthropic::Accumulator::default()),
+            Self::OpenAi => unimplemented!("OpenAI adapter: Task 4"),
+        }
+    }
+
+    /// The error for an error response with `status` and `body`, or with no
+    /// status, for an error event's data in a stream. Any copy of `key` is removed.
+    pub fn parse_error(
+        self,
+        status: Option<u16>,
+        body: &str,
+        retry_after: Option<u64>,
+        key: &ApiKey,
+    ) -> ApiError {
+        match self {
+            Self::Anthropic => anthropic::parse_error(status, body, retry_after, key),
+            Self::OpenAi => unimplemented!("OpenAI adapter: Task 4"),
+        }
+    }
+}
+
+/// How a response ended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Outcome {
+    /// The model called tools and waits for their results.
+    ToolUse,
+    /// The response reached [`super::api::MAX_TOKENS`].
+    MaxTokens,
+    /// The model declined to continue.
+    Refusal,
+    /// The model finished its answer.
+    Done,
+}
+
+/// A tool call the model made.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ToolCall {
+    pub id: String,
+    pub name: String,
+    /// The input, or `Err` with the raw text when it was not valid JSON.
+    pub input: Result<Value, String>,
+}
+
+/// A response that streamed to its end.
+#[derive(Debug)]
+pub struct Finished {
+    pub outcome: Outcome,
+    pub calls: Vec<ToolCall>,
+    /// The history items for the model's output, to append exactly as given.
+    pub items: Vec<Value>,
+}
+
+/// Reads one streamed response, in the provider's format.
+pub enum StreamState {
+    Anthropic(anthropic::Accumulator),
+}
+
+impl StreamState {
+    /// Applies one event. An error event becomes an [`ApiError`].
+    pub fn apply(&mut self, event: &sse::Event, key: &ApiKey) -> Result<Vec<Update>, ApiError> {
+        match self {
+            Self::Anthropic(message) => Ok(message.apply(event, key)?.into_iter().collect()),
+        }
+    }
+
+    /// The finished response, once the provider's terminal event has arrived.
+    pub fn finished(&self) -> Option<Finished> {
+        match self {
+            Self::Anthropic(message) => message.finished(),
         }
     }
 }
