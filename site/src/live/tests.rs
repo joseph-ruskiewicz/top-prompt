@@ -24,6 +24,7 @@ use crate::components::{prompt_input::PromptStatus, tool_call::ToolStatus};
 
 const KEY_A: &str = "sk-ant-api03-visitor-a-0123456789abcdefghijklmnop";
 const KEY_B: &str = "sk-ant-api03-visitor-b-zyxwvutsrqponmlkjihgfedcba";
+const OPENAI_KEY: &str = "sk-proj-visitor-c-0123456789abcdefghijklmnop";
 
 async fn setup() -> (FakeApi, Demo) {
     let fake = FakeApi::start().await.unwrap();
@@ -466,12 +467,24 @@ async fn switching_provider_mid_stream_stops_the_reply() {
     })
     .await;
     assert!(visitor.set_provider(Provider::OpenAi));
-    // The old task makes no late changes.
+    assert!(!visitor.snapshot().has_key);
+    // No generation is left running: a model change and a new message are both
+    // refused while one is.
+    assert!(visitor.set_model(Model::Luna));
+    visitor.set_key(OPENAI_KEY).unwrap();
+    assert!(visitor.send(&demo, "[text] again", ip(31)));
+    visitor.stop();
+    // The old task makes no late changes, so the new turn holds only its own
+    // stopped, empty reply.
     tokio::time::sleep(Duration::from_secs(1)).await;
     let snapshot = visitor.snapshot();
-    assert!(snapshot.turns.is_empty());
     assert_eq!(snapshot.status, PromptStatus::Ready);
-    assert!(!snapshot.has_key);
+    assert_eq!(snapshot.turns.len(), 1);
+    assert_eq!(snapshot.turns[0].user, "[text] again");
+    let reply = last_reply(&snapshot);
+    assert_eq!(reply.state, ReplyState::Stopped);
+    assert_eq!(reply.model, Model::Luna);
+    assert!(reply.parts.is_empty(), "{:?}", reply.parts);
 }
 
 #[tokio::test]
