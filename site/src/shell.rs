@@ -191,6 +191,14 @@ async fn sidebar_body(cx: &Cx, path: &str, dark: Signal<bool>) -> Result<impl Vi
             nav_group(
                 label: "Blocks",
                 nav_link(href: "/blocks", current: path == "/blocks", "Blocks")
+                // A full page load, so the demo's session cookie is set before its
+                // live region connects.
+                nav_link(
+                    href: "/full/claude",
+                    plain: true,
+                    new: true,
+                    "Real model demo"
+                )
             )
             nav_group(
                 label: "Resources",

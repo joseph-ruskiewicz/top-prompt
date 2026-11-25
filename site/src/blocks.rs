@@ -10,6 +10,7 @@ use topcoat::{
 
 use crate::{
     catalog::BLOCKS,
+    components::button::{ButtonSize, ButtonVariant, button_variants},
     shell::{example_section, page_header, pager},
 };
 
@@ -35,6 +36,22 @@ pub async fn page(cx: &Cx) -> Result<impl View> {
                     example_section(example: &block.example, wide: true)
                 </div>
             }
+            <section class="flex flex-col gap-2.5">
+                <h3 class="text-base font-medium">"Full chat app on a real model"</h3>
+                <p class="text-sm leading-relaxed text-muted-foreground">
+                    "The chat app above, answered by the Claude API on your own API key: \
+                     streamed Markdown, summarized thinking in the reasoning component, and \
+                     real tool calls. Your key is held in the server's memory for your session \
+                     only, and every message bills your Anthropic account."
+                </p>
+                <a
+                    href="/full/claude"
+                    class=(button_variants(ButtonVariant::Outline, ButtonSize::Md))
+                >
+                    "Open the real-model demo"
+                    icon(data: iconify_icon!("lucide:arrow-up-right"))
+                </a>
+            </section>
         </div>
         pager(path: "/blocks")
     })

@@ -9,6 +9,7 @@ mod components;
 mod api;
 mod blocks;
 mod catalog;
+mod claude;
 mod docs;
 mod examples;
 mod full;
@@ -17,35 +18,69 @@ mod shell;
 use components::button::{ButtonSize, ButtonVariant, button_variants};
 use topcoat::{
     Result,
-    asset::{AssetBundle, RouterBuilderAssetExt},
+    asset::{AssetBundle, AssetConfig, RouterBuilderAssetExt},
     context::Cx,
     cookie::CookieLayer,
     font::fontsource::fontsource_font,
     icon::{icon, iconify::iconify_icon},
     router::{
-        RouterBuilderDiscoverExt, Slot, href, layout, module_router, page, request::uri, route,
+        ForwardedHeader, Router, RouterBuilderDiscoverExt, Slot, TrustedProxies, href, layout,
+        module_router, page, request::uri, route,
     },
     runtime::{RuntimeLayer, link, signal},
+    session::SessionTokenStore,
     tailwind,
     view::{View, attributes, view},
 };
 
-use crate::examples::chat_app::Chat;
+use crate::{
+    claude::{api::Endpoint, chat::Demo, cookie::StrictSessionCookie},
+    examples::chat_app::Chat,
+};
 
 /// Where the GitHub links point. A placeholder until the repository is public.
 pub const GITHUB_URL: &str = "https://github.com/joseph-ruskiewicz/topcoat-prompt";
 
 #[tokio::main]
 async fn main() {
-    let router = module_router!()
-        .assets(AssetBundle::load().unwrap())
+    let demo = Demo::new(endpoint().await);
+    topcoat::start(router(demo, AssetBundle::load().unwrap()))
+        .await
+        .unwrap();
+}
+
+/// Where the real-model demo sends requests: the Claude API. A debug build started
+/// with `DEMO_FAKE_ANTHROPIC=1` answers from a local fake instead, and one started
+/// with `DEMO_ANTHROPIC_BASE_URL` uses that URL; release builds ignore both.
+async fn endpoint() -> Endpoint {
+    #[cfg(debug_assertions)]
+    if std::env::var_os("DEMO_FAKE_ANTHROPIC").is_some() {
+        let fake = claude::fake::FakeApi::start().await.unwrap();
+        return Endpoint::local(fake.url());
+    }
+    Endpoint::from_env()
+}
+
+/// The application's routes and services.
+fn router(demo: Demo, assets: impl Into<AssetConfig>) -> Router {
+    let mut builder = module_router!()
+        .assets(assets)
         .with(Chat::default())
+        .with(demo)
+        .with(SessionTokenStore::new(StrictSessionCookie))
         .discover()
         .layer(RuntimeLayer::new())
-        .layer(CookieLayer::new())
-        .build();
-
-    topcoat::start(router).await.unwrap();
+        .layer(CookieLayer::new());
+    // On Fly.io every request comes through Fly's proxy, which puts the client's
+    // address in Fly-Client-IP; the demo's per-address limit reads it from there.
+    if std::env::var_os("FLY_APP_NAME").is_some() {
+        builder = builder.trusted_proxies(
+            TrustedProxies::new()
+                .nearest(1)
+                .header(ForwardedHeader::Single("fly-client-ip".parse().unwrap())),
+        );
+    }
+    builder.build()
 }
 
 /// The document. Pages under `/full/` fill the window; every other page sits in the
