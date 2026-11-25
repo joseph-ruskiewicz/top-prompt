@@ -116,7 +116,7 @@ async fn chat_panel(cx: &Cx, snapshot: Snapshot, draft: Signal<String>) -> Resul
                             href="/full/live"
                             class="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
                         >
-                            "Try it with the real Claude API, on your own key"
+                            "Try it on a real model with your Anthropic or OpenAI key"
                         </a>
                     )
                 }

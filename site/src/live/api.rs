@@ -205,32 +205,36 @@ impl Stream {
     }
 }
 
-/// The kinds of error the APIs report, named after the Anthropic `error.type`s. Each
-/// adapter maps its provider's statuses and codes onto them; the OpenAI mapping is in
-/// [`super::openai`].
+/// The kinds of error the APIs report. Each adapter maps its provider's statuses and
+/// codes onto them: [`super::anthropic`] from Anthropic's `error.type`s and
+/// [`super::openai`] from OpenAI's statuses and `error.code`s.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ErrorKind {
-    /// 400 `invalid_request_error`, also used for a spend limit the organization set.
+    /// The request was rejected as invalid (400). Anthropic also uses it for a spend
+    /// limit the organization set.
     InvalidRequest,
-    /// 401 `authentication_error`: a malformed, revoked or expired key.
+    /// The key is malformed, revoked or expired (401).
     Authentication,
-    /// 402 `billing_error`, such as no credit left.
+    /// The account cannot pay, such as no credit left: Anthropic's 402
+    /// `billing_error`, or OpenAI's 429 `insufficient_quota`.
     Billing,
-    /// 403 `permission_error`.
+    /// The key may not do this (403).
     Permission,
-    /// 404 `not_found_error`, including a model the organization cannot use.
+    /// The model or resource is not available to the account (404, or OpenAI's
+    /// `model_not_found`).
     NotFound,
-    /// 413 `request_too_large`.
+    /// The request is too large (413).
     RequestTooLarge,
-    /// 429 `rate_limit_error`, including the usage tier's monthly spend cap.
+    /// Too many requests (429). For Anthropic this includes the usage tier's
+    /// monthly spend cap.
     RateLimit,
-    /// 500 `api_error`.
+    /// The provider had an internal error (500).
     Api,
-    /// 504 `timeout_error`.
+    /// The request timed out (504).
     Timeout,
-    /// 529 `overloaded_error`.
+    /// The provider is overloaded: Anthropic's 529, OpenAI's 503.
     Overloaded,
-    /// A type the docs may add later.
+    /// A type or code the docs may add later.
     Other(String),
 }
 
@@ -298,13 +302,13 @@ impl ApiError {
                     .to_owned()
             }
             ErrorKind::Billing => format!(
-                "Your {provider} account has a billing problem, such as no credit left. \
-                 Check billing in your {provider} account."
+                "Your {provider} account has a billing problem, such as no credit left. {}",
+                model.provider().billing_hint()
             ),
             ErrorKind::Permission => format!(
-                "This key is not allowed to use {}. Check the key's permissions in your \
-                 {provider} account.",
-                model.label()
+                "This key is not allowed to use {}. {}",
+                model.label(),
+                model.provider().permission_hint()
             ),
             ErrorKind::NotFound => format!(
                 "{} is not available to your organization. Pick another model.",

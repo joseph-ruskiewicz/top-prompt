@@ -262,7 +262,6 @@ struct Reply {
 #[derive(Clone, Default)]
 pub struct Snapshot {
     pub has_key: bool,
-    #[allow(dead_code, reason = "the page shows it once it has a provider picker")]
     pub provider: Provider,
     pub model: Model,
     pub turns: Vec<TurnView>,
@@ -452,7 +451,6 @@ impl Visitor {
 
     /// Switches provider. The key and the conversation belong to the old one, so
     /// they go, and any reply being generated stops. Returns whether it changed.
-    #[allow(dead_code, reason = "the page calls it once it has a provider picker")]
     pub fn set_provider(&self, provider: Provider) -> bool {
         let mut state = self.state.lock().unwrap();
         if state.provider == provider {

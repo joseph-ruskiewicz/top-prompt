@@ -22,7 +22,8 @@ use super::{
         Demo, IDLE_TIMEOUT, MAX_MESSAGE_LEN, MAX_TURNS, Notice, Part, ReplyState, ReplyView,
         Snapshot, TurnView, VISITOR_REQUESTS, Visitor,
     },
-    provider::Model,
+    key,
+    provider::{Model, Provider},
 };
 use crate::components::{
     branch_picker::{
@@ -42,9 +43,6 @@ use crate::components::{
     system_message::{SystemMessageVariant, system_message, system_message_cta},
     tool_call::{tool_call, tool_call_input, tool_call_output},
 };
-
-/// Where visitors create a key.
-const CONSOLE_KEYS_URL: &str = "https://platform.claude.com/settings/keys";
 
 const SUGGESTIONS: [&str; 3] = [
     "What is 1234 * 5678 / 9, exactly?",
@@ -113,7 +111,10 @@ async fn demo_panel(
                 snapshot: snapshot,
                 draft: draft
             ),
-            Some(_) => key_form(key_error: key_error),
+            Some(snapshot) => key_form(
+                provider: snapshot.provider,
+                key_error: key_error
+            ),
             None if has_session => <div class="m-auto max-w-md p-6">
                 system_message(
                     variant: SystemMessageVariant::Warning,
@@ -134,34 +135,124 @@ async fn demo_panel(
     })
 }
 
-/// The form for the key, with what happens to it.
+/// The provider choice and the form for the key, with what happens to it.
 #[component]
-async fn key_form(cx: &Cx, key_error: Signal<String>) -> Result<impl View> {
+async fn key_form(cx: &Cx, provider: Provider, key_error: Signal<String>) -> Result<impl View> {
     let idle_minutes = IDLE_TIMEOUT.as_secs() / 60;
+    let name = provider.label();
+    let placeholder = format!("{}…", key::prefix(provider));
 
     Ok(view! {
         <div class="min-h-0 flex-1 overflow-y-auto">
             <div class="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 py-10">
                 <div class="flex flex-col gap-2">
                     <h1 class="text-2xl font-[450] tracking-tight">
-                        "Chat with Claude, on your own API key"
+                        "Live model demo"
                     </h1>
                     <p class="text-sm leading-relaxed text-muted-foreground">
                         "The same components as the "
                         <a href="/full/chat-app" class="underline underline-offset-4">
                             "fake-model demo"
                         </a>
-                        ", answered by the real Claude API: streamed text, summarized thinking \
-                         and real tool calls. Every message is billed to your Anthropic \
-                         account."
+                        ", answered by a real model from Anthropic or OpenAI on your own API \
+                         key: streamed text, summarized reasoning and real tool calls."
                     </p>
                 </div>
+                <form
+                    class="flex flex-col gap-4"
+                    @submit=$(|e: Event| e.prevent_default())
+                >
+                    // Native radios: Tab reaches the group, arrows move the choice.
+                    <fieldset class="flex flex-col gap-2">
+                        <legend class="mb-2 text-sm font-medium">"Provider"</legend>
+                        <div
+                            class="flex w-fit gap-0.5 rounded-lg border border-border p-0.5"
+                        >
+                            for option in Provider::ALL {
+                                <label
+                                    class="cursor-pointer rounded-md px-3 py-1 text-sm text-muted-foreground has-[:checked]:bg-foreground/10 has-[:checked]:font-medium has-[:checked]:text-foreground has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring hover:text-foreground"
+                                >
+                                    <input
+                                        type="radio"
+                                        name="provider"
+                                        value=(option.id())
+                                        checked=(option == provider)
+                                        class="sr-only"
+                                        @change=$(async |e: Event| {
+                                            // A key typed for the old provider goes
+                                            // too, so the next one is a change.
+                                            raw!("document.getElementById('api-key').value = '';", ());
+                                            key_error.set("".to_owned());
+                                            set_provider(e.target.value).await;
+                                        })
+                                    >
+                                    (option.label())
+                                </label>
+                            }
+                        </div>
+                    </fieldset>
+                    <div class="flex flex-col gap-2">
+                        <label for="api-key" class="text-sm font-medium">
+                            (name)
+                            " API key"
+                        </label>
+                        <div class="flex gap-2">
+                            // The value goes to the server once, when the field changes; it
+                            // is not kept in a signal. Password managers are asked not to
+                            // save it.
+                            <input
+                                id="api-key"
+                                type="password"
+                                name="api-key"
+                                autocomplete="off"
+                                spellcheck="false"
+                                data-1p-ignore="true"
+                                data-lpignore="true"
+                                placeholder=(placeholder)
+                                aria-describedby="api-key-help"
+                                class="h-9 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                @change=$(async |e: Event| {
+                                    key_error.set("Checking…".to_owned());
+                                    let message = save_key(e.target.value).await;
+                                    key_error.set(message);
+                                })
+                            >
+                            <button
+                                type="submit"
+                                class="h-9 shrink-0 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                                "Use key"
+                            </button>
+                        </div>
+                        <p
+                            id="api-key-help"
+                            class="text-sm leading-relaxed text-muted-foreground"
+                        >
+                            "Use a key made for this: create one in "
+                            <a
+                                href=(provider.keys_url())
+                                target="_blank"
+                                rel="noreferrer"
+                                class="underline underline-offset-4"
+                            >
+                                (provider.console())
+                            </a>
+                            " "
+                            (provider.key_advice())
+                            ", and delete it afterwards."
+                        </p>
+                        <p role="status" class="min-h-5 text-sm text-muted-foreground">
+                            $(key_error.get())
+                        </p>
+                    </div>
+                </form>
                 <ul
                     class="flex list-disc flex-col gap-1.5 pl-5 text-sm leading-relaxed"
                 >
                     <li>
-                        "Your key is sent to the topcoat-prompt server, which makes the API \
-                         calls to api.anthropic.com for you."
+                        "Your key is sent to the topcoat-prompt server, which calls the "
+                        (name)
+                        " API for you."
                     </li>
                     <li>
                         "It is held only in the server's memory and never stored: not on \
@@ -172,55 +263,11 @@ async fn key_form(cx: &Cx, key_error: Signal<String>) -> Result<impl View> {
                     </li>
                     <li>"It is used only for this demo."</li>
                     <li>
-                        "Use a key made for this: create one in the "
-                        <a
-                            href=(CONSOLE_KEYS_URL)
-                            target="_blank"
-                            rel="noreferrer"
-                            class="underline underline-offset-4"
-                        >
-                            "Claude Console"
-                        </a>
-                        " in a workspace with a low spend limit, and delete it afterwards."
+                        "Every message is billed to your "
+                        (name)
+                        " account."
                     </li>
                 </ul>
-                <form
-                    class="flex flex-col gap-2"
-                    @submit=$(|e: Event| e.prevent_default())
-                >
-                    <label for="api-key" class="text-sm font-medium">
-                        "Anthropic API key"
-                    </label>
-                    <div class="flex gap-2">
-                        // The value goes to the server once, when the field changes; it is
-                        // not kept in a signal. Password managers are asked not to save it.
-                        <input
-                            id="api-key"
-                            type="password"
-                            name="api-key"
-                            autocomplete="off"
-                            spellcheck="false"
-                            data-1p-ignore="true"
-                            data-lpignore="true"
-                            placeholder="sk-ant-…"
-                            class="h-9 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            @change=$(async |e: Event| {
-                                key_error.set("Checking…".to_owned());
-                                let message = save_key(e.target.value).await;
-                                key_error.set(message);
-                            })
-                        >
-                        <button
-                            type="submit"
-                            class="h-9 shrink-0 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                            "Use key"
-                        </button>
-                    </div>
-                    <p role="status" class="min-h-5 text-sm text-muted-foreground">
-                        $(key_error.get())
-                    </p>
-                </form>
                 <p class="text-xs leading-relaxed text-muted-foreground">
                     "Limits: "
                     (MAX_TURNS)
@@ -245,6 +292,14 @@ async fn chat_panel(cx: &Cx, snapshot: Snapshot, draft: Signal<String>) -> Resul
     let full = snapshot.full;
     let last = snapshot.turns.len();
     let current_model = snapshot.model;
+    let provider = snapshot.provider;
+    // With two providers, changing means the other one.
+    let other = if provider == Provider::Anthropic {
+        Provider::OpenAi
+    } else {
+        Provider::Anthropic
+    };
+    let other_id = other.id().to_owned();
 
     Ok(view! {
         <header
@@ -257,7 +312,7 @@ async fn chat_panel(cx: &Cx, snapshot: Snapshot, draft: Signal<String>) -> Resul
                 icon(data: iconify_icon!("lucide:arrow-left"))
                 "Fake-model demo"
             </a>
-            <span class="font-medium">"Claude"</span>
+            <span class="font-medium">(provider.label())</span>
             <select
                 aria-label="Model"
                 disabled=(busy)
@@ -266,35 +321,54 @@ async fn chat_panel(cx: &Cx, snapshot: Snapshot, draft: Signal<String>) -> Resul
                     set_model(e.target.value).await;
                 })
             >
-                for model in Model::for_provider(current_model.provider()) {
+                for model in Model::for_provider(provider) {
                     <option value=(model.id()) selected=(model == current_model)>
                         (model.label())
                     </option>
                 }
             </select>
             <span class="text-xs text-muted-foreground">
-                "Billed to your Anthropic account"
+                "Billed to your "
+                (provider.label())
+                " account"
             </span>
-            <button
-                type="button"
-                class="ml-auto inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-sm text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
-                @click=$(async |_e: Event| {
-                    clear_key().await;
-                })
-            >
-                icon(data: iconify_icon!("lucide:key-round"))
-                "Clear key"
-            </button>
+            <div class="ml-auto flex items-center gap-1">
+                // Both go back to the key form: one for the other provider, one for
+                // this provider with a new key.
+                <button
+                    type="button"
+                    class="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-sm text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                    @click=$(async |_e: Event| {
+                        set_provider(other_id.clone()).await;
+                    })
+                >
+                    icon(data: iconify_icon!("lucide:arrow-left-right"))
+                    "Change provider"
+                </button>
+                <button
+                    type="button"
+                    class="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-sm text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                    @click=$(async |_e: Event| {
+                        clear_key().await;
+                    })
+                >
+                    icon(data: iconify_icon!("lucide:key-round"))
+                    "Clear key"
+                </button>
+            </div>
         </header>
         conversation(
             attrs: attributes! { aria-busy=(if busy { "true" } else { "false" }) },
             conversation_content(
                 if snapshot.turns.is_empty() {
                     conversation_empty_state(
-                        title: "Ask Claude something",
-                        description: "Replies stream from the Claude API with summarized \
-                            thinking. Claude can call two tools here: a calculator and a \
-                            search of this site's components.",
+                        title: format!("Ask {} something", current_model.label()),
+                        description: format!(
+                            "Replies stream from the {} API with the model's reasoning \
+                             summarized. The model can call two tools here: a calculator and \
+                             a search of this site's components.",
+                            provider.label(),
+                        ),
                         suggestions(
                             attrs: attributes! { class="max-w-md justify-center" },
                             for prompt in SUGGESTIONS {
@@ -346,7 +420,7 @@ async fn chat_panel(cx: &Cx, snapshot: Snapshot, draft: Signal<String>) -> Resul
                 prompt_input_textarea(
                     attrs: attributes! {
                         name="message"
-                        placeholder="Message Claude…"
+                        placeholder=(format!("Message {}…", current_model.label()))
                         maxlength=(MAX_MESSAGE_LEN)
                         disabled=(full)
                         :value=$(draft.get())
@@ -544,6 +618,16 @@ pub async fn clear_key(cx: &Cx) -> Result<bool> {
         visitor.clear_key();
     }
     Ok(true)
+}
+
+/// Switches provider, from the listed ones only. This forgets the key and the
+/// conversation.
+#[procedure]
+pub async fn set_provider(cx: &Cx, provider: String) -> Result<bool> {
+    let (Some(visitor), Some(provider)) = (visitor(cx).await?, Provider::from_id(&provider)) else {
+        return Ok(false);
+    };
+    Ok(visitor.set_provider(provider))
 }
 
 /// Picks the model for the next replies, from the allowed list only.

@@ -675,6 +675,49 @@ async fn the_first_load_sets_a_strict_session_cookie() {
     assert!(again.headers().get("set-cookie").is_none());
 }
 
+/// A router, a cookie for a session and the visitor behind it.
+fn page_visitor(demo: &Demo) -> (topcoat::router::Router, String, Arc<Visitor>) {
+    let token = Token::random();
+    let cookie = format!("__Host-demo={}", token.encode());
+    let visitor = demo.visitor(&token.hash()).unwrap();
+    (site(demo), cookie, visitor)
+}
+
+#[tokio::test]
+async fn the_key_form_offers_both_providers() {
+    let (_fake, demo) = setup().await;
+    let (router, cookie, visitor) = page_visitor(&demo);
+
+    let (_, page) = get(&router, "/full/live", Some(&cookie)).await;
+    for text in ["Anthropic", "OpenAI", "Anthropic API key"] {
+        assert!(page.contains(text), "missing {text:?}");
+    }
+
+    assert!(visitor.set_provider(Provider::OpenAi));
+    let (_, page) = get(&router, "/full/live", Some(&cookie)).await;
+    assert!(page.contains("OpenAI API key"));
+    assert!(page.contains(Provider::OpenAi.keys_url()));
+    assert!(!page.contains("platform.claude.com"));
+}
+
+#[tokio::test]
+async fn the_model_list_follows_the_provider() {
+    let (_fake, demo) = setup().await;
+    let (router, cookie, visitor) = page_visitor(&demo);
+    visitor.set_provider(Provider::OpenAi);
+    visitor.set_key(OPENAI_KEY).unwrap();
+
+    let (_, page) = get(&router, "/full/live", Some(&cookie)).await;
+    for model in Model::for_provider(Provider::OpenAi) {
+        let option = format!("<option value=\"{}\"", model.id());
+        assert!(page.contains(&option), "missing {option}");
+    }
+    for model in Model::for_provider(Provider::Anthropic) {
+        assert!(!page.contains(model.id()), "shows {}", model.id());
+    }
+    assert!(page.contains("Billed to your OpenAI account"));
+}
+
 #[tokio::test]
 async fn the_key_never_appears_in_pages_or_printed_state() {
     key_stays_out_of_pages(Provider::Anthropic, KEY_A, "visitor-a").await;

@@ -19,10 +19,6 @@ pub enum Provider {
     OpenAi,
 }
 
-#[allow(
-    dead_code,
-    reason = "the page uses these once it has a provider picker"
-)]
 impl Provider {
     pub const ALL: [Self; 2] = [Self::Anthropic, Self::OpenAi];
 
@@ -52,6 +48,43 @@ impl Provider {
             // From the "Create and export an API key" step of
             // https://developers.openai.com/api/docs/quickstart (2026-11-24).
             Self::OpenAi => "https://platform.openai.com/api-keys",
+        }
+    }
+
+    /// Where the visitor manages this provider's keys and billing, for a sentence.
+    pub fn console(self) -> &'static str {
+        match self {
+            Self::Anthropic => "the Claude Console",
+            Self::OpenAi => "the OpenAI dashboard",
+        }
+    }
+
+    /// How to make a key that cannot cost much, for a sentence after "create one".
+    pub fn key_advice(self) -> &'static str {
+        match self {
+            Self::Anthropic => "in a workspace with a low spend limit",
+            Self::OpenAi => "with restricted permissions, in a project with a low budget",
+        }
+    }
+
+    /// What to do about a billing error.
+    pub fn billing_hint(self) -> &'static str {
+        match self {
+            Self::Anthropic => {
+                "Add credit or raise the spend limit under Billing in the Claude Console."
+            }
+            Self::OpenAi => "Add credit under Billing in the OpenAI dashboard.",
+        }
+    }
+
+    /// What to do when the key may not use a model.
+    pub fn permission_hint(self) -> &'static str {
+        match self {
+            Self::Anthropic => "Check the key's workspace in the Claude Console.",
+            Self::OpenAi => {
+                "Check the key's permissions and the project's allowed models in the OpenAI \
+                 dashboard."
+            }
         }
     }
 

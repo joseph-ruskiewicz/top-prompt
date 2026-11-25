@@ -39,16 +39,16 @@ pub async fn page(cx: &Cx) -> Result<impl View> {
             <section class="flex flex-col gap-2.5">
                 <h3 class="text-base font-medium">"Full chat app on a real model"</h3>
                 <p class="text-sm leading-relaxed text-muted-foreground">
-                    "The chat app above, answered by the Claude API on your own API key: \
-                     streamed Markdown, summarized thinking in the reasoning component, and \
-                     real tool calls. Your key is held in the server's memory for your session \
-                     only, and every message bills your Anthropic account."
+                    "The chat app above, answered by a real model on your own Anthropic or \
+                     OpenAI key: streamed Markdown, summarized reasoning in the reasoning \
+                     component, and real tool calls. Your key is held in the server's memory \
+                     for your session only, and every message bills your own account."
                 </p>
                 <a
                     href="/full/live"
                     class=(button_variants(ButtonVariant::Outline, ButtonSize::Md))
                 >
-                    "Open the real-model demo"
+                    "Open the live model demo"
                     icon(data: iconify_icon!("lucide:arrow-up-right"))
                 </a>
             </section>

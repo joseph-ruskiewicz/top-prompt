@@ -22,7 +22,8 @@ async fn live_session(cx: &Cx, body: Body, next: Next<'_>) -> Result<Response> {
     next.run(cx, body).await
 }
 
-/// The chat demo answered by the real Claude API, on the visitor's own key.
+/// The chat demo answered by a real model, Anthropic's or OpenAI's, on the visitor's
+/// own key.
 #[page("./live")]
 async fn live(cx: &Cx) -> Result<impl View> {
     Ok(view! { crate::live::view::page() })

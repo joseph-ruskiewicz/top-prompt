@@ -68,7 +68,8 @@ fn provider_of(key: &str) -> Option<Provider> {
     }
 }
 
-fn prefix(provider: Provider) -> &'static str {
+/// The prefix every key for `provider` starts with.
+pub fn prefix(provider: Provider) -> &'static str {
     match provider {
         Provider::Anthropic => ANTHROPIC_PREFIX,
         Provider::OpenAi => OPENAI_PREFIX,
