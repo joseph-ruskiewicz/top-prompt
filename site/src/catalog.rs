@@ -671,6 +671,16 @@ pub static BLOCKS: &[Block] = &[
         ),
     },
     Block {
+        slug: "chart-answer",
+        example: example!(
+            block_chart_answer,
+            "Chart in an answer",
+            "An answer that calls a tool and draws what it returned. The line chart is from \
+             topcoat-graph, a second `topcoat ui` registry, and sits in the message like any \
+             other content."
+        ),
+    },
+    Block {
         slug: "sidebar-history",
         example: example!(block_sidebar_history, "Sidebar with chat history"),
     },

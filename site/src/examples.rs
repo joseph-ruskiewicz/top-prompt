@@ -4,6 +4,7 @@
 pub mod attachment_app_state;
 pub mod attachment_basic;
 pub mod attachment_custom;
+pub mod block_chart_answer;
 pub mod block_conversation_actions;
 pub mod block_conversation_avatars;
 pub mod block_conversation_basic;

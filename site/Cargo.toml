@@ -22,6 +22,8 @@ tokio = { version = "1.43", features = ["rt-multi-thread", "macros", "sync", "ti
 # The component registry. `topcoat ui` only offers registries that are direct
 # dependencies; the crate itself adds no code.
 topcoat-prompt = { path = "../crates/topcoat-prompt" }
+# Charts for the "chart in an answer" block: a second registry next to topcoat-prompt.
+topcoat-graph = "0.1.0"
 topcoat = { version = "0.12.1", features = ["font-fontsource", "icon-iconify", "session", "tailwind", "ui"] }
 
 [build-dependencies]
