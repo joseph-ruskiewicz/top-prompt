@@ -1099,3 +1099,31 @@ async fn openai_midstream_error_keeps_text() {
         json!({"type": "message", "role": "assistant", "content": "This reply starts, and then"})
     );
 }
+
+#[tokio::test]
+async fn the_chart_block_answers_with_a_tool_call_and_a_chart() {
+    let (_fake, demo) = setup().await;
+    let router = site(&demo);
+    for path in ["/blocks", "/full/chart-answer"] {
+        let (response, html) = get(&router, path, None).await;
+        assert_eq!(response.status(), 200, "{path}");
+        // The answer names the tool it called, then draws what the tool returned.
+        let chart = html
+            .find(r#"aria-label="Kyoto forecast for the next seven days""#)
+            .unwrap_or_else(|| panic!("{path}: no chart"));
+        let tool = html[..chart].rfind("get_forecast");
+        assert!(tool.is_some(), "{path}: no tool call before the chart");
+        // The figure ends with its data table.
+        let figure = &html[chart..];
+        let figure = &figure[..figure.find("</table>").expect("the chart's data table")];
+        // One line each for highs and lows, and the same numbers in the data table.
+        assert_eq!(figure.matches(r#"data-chart="line""#).count(), 2, "{path}");
+        assert!(figure.contains(r#"<th scope="row">Sat</th>"#), "{path}");
+        assert!(figure.contains("<td>23</td>"), "{path}");
+        // The answer's summary is worked out from the same data.
+        assert!(
+            html.contains("Saturday is the warmest day at 23°"),
+            "{path}"
+        );
+    }
+}

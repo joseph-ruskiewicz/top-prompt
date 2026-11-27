@@ -44,6 +44,26 @@ file = "src/components/spinner.rs"
 hash = "sha256:b9b2c2790d5cd0499ea6b3f33aeaf08c132be21bc67f35035e17ed6776db76d3"
 file = "src/components/tooltip.rs"
 
+[registries.topcoat-graph.components.chart]
+hash = "sha256:4c2192af7e5aa2d980b35c91b83201fbf276a87bb87ecdab1d80721545b89a41"
+file = "src/components/chart.rs"
+
+[registries.topcoat-graph.components.chart_axis]
+hash = "sha256:6fd4f48b498ed2da77f7b10a479ab858a3f96099c3daa77ea4b5c7c60994651c"
+file = "src/components/chart_axis.rs"
+
+[registries.topcoat-graph.components.chart_legend]
+hash = "sha256:821ed11cd9dfb58a050334a93e29c8e01f1765c3572a0f4779983adb45bcffd0"
+file = "src/components/chart_legend.rs"
+
+[registries.topcoat-graph.components.chart_tooltip]
+hash = "sha256:def5d08f21c2f7802f03db0ceeb3ce6dc786d56baa0046d09bc01e13b4fd302a"
+file = "src/components/chart_tooltip.rs"
+
+[registries.topcoat-graph.components.line_chart]
+hash = "sha256:0a37295a543824c76b5d0b5de47e0af2459e4189c6522544889a7fed3d2fd586"
+file = "src/components/line_chart.rs"
+
 [registries.topcoat-prompt.components.attachment]
 hash = "sha256:17cc05238cc463eb9badab1f1228d66b3f5b3a9afc538484429e3297e493aba9"
 file = "src/components/attachment.rs"

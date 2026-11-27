@@ -1534,6 +1534,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "topcoat",
+ "topcoat-graph",
  "topcoat-prompt",
  "topcoat-ui",
 ]
@@ -1957,6 +1958,12 @@ dependencies = [
  "syn 3.0.10",
  "topcoat-font-grammar",
 ]
+
+[[package]]
+name = "topcoat-graph"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9641e53668c0fcc39b400663c48417225d25d660899871251fc1dee0388a185e"
 
 [[package]]
 name = "topcoat-icon"
